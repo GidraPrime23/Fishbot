@@ -17,6 +17,9 @@ class Prefs(ctx: Context) {
     var alarm: Boolean
         get() = sp.getBoolean("alarm", true)
         set(v) { sp.edit().putBoolean("alarm", v).apply() }
+    var logs: Boolean
+        get() = sp.getBoolean("logs", false)
+        set(v) { sp.edit().putBoolean("logs", v).apply() }
     /** Сколько забросов подряд без поклёвки до остановки (сломана удочка / нет наживки / не у воды). */
     var maxMiss: Int
         get() = sp.getInt("maxMiss", 3)

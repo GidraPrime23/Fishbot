@@ -67,7 +67,7 @@ class MainActivity : Activity() {
             setOnClickListener { onClick() }
         }
 
-        col.addView(title("FishBot — автоматическая рыбалка"))
+        col.addView(title("FishBot — автоматическая рыбалка").apply { setOnLongClickListener { prefs.logs = !prefs.logs; toast(if (prefs.logs) "Логи: вкл" else "Логи: выкл"); true } })
 
         tvOverlay = note("")
         col.addView(tvOverlay)

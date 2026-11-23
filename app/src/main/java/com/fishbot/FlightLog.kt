@@ -24,6 +24,7 @@ object FlightLog {
     fun save(ctx: Context) {
         if (sb.length < 80) return
         if (Build.VERSION.SDK_INT < 29) return
+        if (!ctx.getSharedPreferences("fishbot", Context.MODE_PRIVATE).getBoolean("logs", false)) return
         try {
             val cv = ContentValues()
             cv.put(MediaStore.MediaColumns.DISPLAY_NAME, "fishbot_log_" + System.currentTimeMillis() + ".csv")
