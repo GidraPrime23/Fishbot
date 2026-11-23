@@ -81,7 +81,9 @@ class BotLoop(
         val w = x1 - x0
         val h = y1 - y0
         if (w <= 0 || h <= 0) return false
-        return Vision.hasBite(grab.region(img, x0, y0, w, h), w, h, sc)
+        val px = grab.region(img, x0, y0, w, h)
+        Diag.badge(px, w, h, onState)
+        return Vision.hasBite(px, w, h, sc)
     }
 
     // ------------------------------------------------------------------ цикл
