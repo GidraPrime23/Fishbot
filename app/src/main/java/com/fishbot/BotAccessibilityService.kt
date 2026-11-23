@@ -47,6 +47,29 @@ class BotAccessibilityService : AccessibilityService() {
         dispatchGesture(g, null, null)
     }
 
+    @Volatile private var pulseBusy = false
+    private var pulseT = 0L
+
+    /** Одиночный короткий тап без удержания. false, если предыдущий ещё идёт. */
+    fun pulse(x: Float, y: Float, ms: Long = 60): Boolean {
+        if (pulseBusy && System.currentTimeMillis() - pulseT < 500) return false
+        pulseBusy = true
+        pulseT = System.currentTimeMillis()
+        return try {
+            val p = Path().apply { moveTo(x, y) }
+            val g = GestureDescription.Builder().addStroke(StrokeDescription(p, 0, ms)).build()
+            val ok = dispatchGesture(g, object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) { pulseBusy = false }
+                override fun onCancelled(gestureDescription: GestureDescription?) { pulseBusy = false }
+            }, null)
+            if (!ok) pulseBusy = false
+            ok
+        } catch (e: Throwable) {
+            pulseBusy = false
+            false
+        }
+    }
+
     /** true = держать палец на (x, y), false = отпустить. Можно вызывать из любого потока. */
     fun setHold(want: Boolean, x: Float, y: Float) {
         main.post {
