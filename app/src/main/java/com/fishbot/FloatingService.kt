@@ -59,6 +59,7 @@ class FloatingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (running) return START_NOT_STICKY
+        CrashGuard.install(applicationContext)
         prefs = Prefs(this)
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         startForegroundCompat()
@@ -82,10 +83,11 @@ class FloatingService : Service() {
 
     override fun onDestroy() {
         running = false
-        loop?.stop()
+        try { BotAccessibilityService.instance?.setHold(false, 0f, 0f) } catch (_: Throwable) {}
+        try { loop?.stop() } catch (_: Throwable) {}
         try { root?.let { wm.removeView(it) } } catch (_: Exception) {}
         try { calibView?.let { wm.removeView(it) } } catch (_: Exception) {}
-        grabber?.release()
+        try { grabber?.release() } catch (_: Throwable) {}
         super.onDestroy()
     }
 

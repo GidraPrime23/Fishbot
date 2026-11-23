@@ -30,6 +30,7 @@ class BotAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        CrashGuard.install(applicationContext)
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
@@ -51,7 +52,7 @@ class BotAccessibilityService : AccessibilityService() {
         main.post {
             wantHold = want
             if (want) { hx = x; hy = y }
-            pump()
+            try { pump() } catch (e: Throwable) { inFlight = false; stroke = null }
         }
     }
 
