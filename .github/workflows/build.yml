@@ -19,3 +19,7 @@ jobs:
         with:
           name: FishBot-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: R8-reports
+          path: app/build/outputs/mapping/debug/
