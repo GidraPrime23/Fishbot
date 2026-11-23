@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
+        android:icon="@drawable/ic_launcher_fishbot"
+        android:roundIcon="@drawable/ic_launcher_fishbot"
         android:label="FishBot"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
