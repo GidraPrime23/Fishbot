@@ -114,12 +114,20 @@ object License {
     private fun loop(app: Context, onDenied: () -> Unit) {
         var fails = 0
         var first = true
+        var lastToast = 0L
         while (FloatingService.running) {
             val key = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(K_KEY, null)
             if (key == null) { onDenied(); return }
             val r = touch(app, key)
             if (r == Res.OK) {
                 fails = 0; first = false
+            val now = System.currentTimeMillis()
+            if (lastToast == 0L || now - lastToast >= 300000L) {
+                lastToast = now
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    android.widget.Toast.makeText(app, "Лицензия проверена, успешно", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
             } else if (r == Res.BLOCKED) {
                 revoke(app); onDenied(); return
             } else {
