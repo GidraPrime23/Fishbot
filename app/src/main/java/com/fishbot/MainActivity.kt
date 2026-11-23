@@ -33,6 +33,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!Gate.isUnlocked(this)) { LockScreen.show(this); return }
         prefs = Prefs(this)
         if (Build.VERSION.SDK_INT >= 33) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2)
@@ -118,6 +119,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (!Gate.isUnlocked(this)) return
         val ov = Settings.canDrawOverlays(this)
         tvOverlay.text = if (ov) "✓ Поверх окон: разрешено" else "✗ Поверх окон: не разрешено"
         val acc = BotAccessibilityService.instance != null
@@ -139,6 +141,7 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (!Gate.isUnlocked(this)) return
         if (requestCode == 100 && resultCode == RESULT_OK && data != null) {
             val i = Intent(this, FloatingService::class.java)
                 .putExtra(FloatingService.EXTRA_CODE, resultCode)
