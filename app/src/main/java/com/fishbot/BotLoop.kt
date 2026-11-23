@@ -90,7 +90,7 @@ class BotLoop(
 
     private fun loop() {
         var misses = 0
-        val ctl = Vision.Controller()
+        val ctl = Pilot()
         while (active) {
             val acc = BotAccessibilityService.instance
             if (acc == null) { fail("Включите спецвозможности FishBot"); return }
@@ -152,7 +152,7 @@ class BotLoop(
 
     // ------------------------------------------------------------ мини-игра
 
-    private fun play(W: Int, sc: Double, bx: Int, by: Int, ctl: Vision.Controller) {
+    private fun play(W: Int, sc: Double, bx: Int, by: Int, ctl: Pilot) {
         val acc = BotAccessibilityService.instance ?: return
         val z0 = zoneAbs ?: return
         onState("мини-игра")
@@ -161,32 +161,48 @@ class BotLoop(
         val sx1 = minOf(W - 1, z0[1] + zw)
         val sw = sx1 - sx0 + 1
         ctl.reset()
+        FlightLog.start()
         var last: IntArray? = null
         var lastZoneT = 0L
         var lastOk = now()
-        while (active) {
-            val img = grab.poll()
-            if (img == null) {
-                Thread.sleep(3)
-                if (now() - lastOk > 800) break
-                continue
+        val tStart = now()
+        var prevT = tStart
+        try {
+            while (active) {
+                val img = grab.poll()
+                if (img == null) {
+                    Thread.sleep(3)
+                    if (now() - lastOk > 800) break
+                    continue
+                }
+                val h = img.height
+                val px = grab.region(img, sx0, 0, sw, h)
+                val t = now()
+                val z = Vision.findZone(px, sw, h, sc)
+                if (z != null) { last = z; lastZoneT = t }
+                val lz = last
+                if (lz != null && t - lastZoneT < 600) {
+                    val m = Vision.findMarker(px, sw, h, lz, sc)
+                    if (!m.isNaN()) {
+                        lastOk = t
+                        val hold = ctl.decide(t / 1000.0, m, lz[2].toDouble(), lz[3].toDouble())
+                        acc.setHold(hold, bx.toFloat(), by.toFloat())
+                        FlightLog.row("${t - tStart},${m.toInt()},${lz[2]},${lz[3]},${ctl.v.toInt()},${ctl.p.toInt()},${if (hold) 1 else 0},${t - prevT}")
+                    } else {
+                        val hold = ctl.lost(t / 1000.0)
+                        acc.setHold(hold, bx.toFloat(), by.toFloat())
+                        FlightLog.row("${t - tStart},NaN,${lz[2]},${lz[3]},0,0,${if (hold) 1 else 0},${t - prevT}")
+                    }
+                } else {
+                    acc.setHold(false, bx.toFloat(), by.toFloat())
+                    FlightLog.row("${t - tStart},NOZONE,0,0,0,0,0,${t - prevT}")
+                }
+                prevT = t
+                if (t - lastOk > 800) break
             }
-            val h = img.height
-            val px = grab.region(img, sx0, 0, sw, h)
-            val t = now()
-            val z = Vision.findZone(px, sw, h, sc)
-            if (z != null) { last = z; lastZoneT = t }
-            val lz = last
-            if (lz != null && t - lastZoneT < 600) {
-                val m = Vision.findMarker(px, sw, h, lz, sc)
-                if (!m.isNaN()) {
-                    lastOk = t
-                    val hold = ctl.decide(t / 1000.0, m, lz[2].toDouble(), lz[3].toDouble())
-                    acc.setHold(hold, bx.toFloat(), by.toFloat())
-                } else { acc.setHold(ctl.lost(t / 1000.0), bx.toFloat(), by.toFloat()) }
-            }
-            if (t - lastOk > 800) break
+        } finally {
+            acc.setHold(false, bx.toFloat(), by.toFloat())
+            FlightLog.save(acc)
         }
-        acc.setHold(false, bx.toFloat(), by.toFloat())
     }
 }

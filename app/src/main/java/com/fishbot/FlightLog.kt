@@ -1,0 +1,36 @@
+package com.fishbot
+
+import android.content.ContentValues
+import android.content.Context
+import android.os.Build
+import android.provider.MediaStore
+
+object FlightLog {
+    private val sb = StringBuilder()
+
+    @Synchronized
+    fun start() {
+        sb.setLength(0)
+        sb.append("t_ms,marker,zTop,zBot,v,p,cmd,dt_ms\n")
+    }
+
+    @Synchronized
+    fun row(line: String) {
+        if (sb.length < 2000000) sb.append(line).append('\n')
+    }
+
+    @Synchronized
+    fun save(ctx: Context) {
+        if (sb.length < 80) return
+        if (Build.VERSION.SDK_INT < 29) return
+        try {
+            val cv = ContentValues()
+            cv.put(MediaStore.MediaColumns.DISPLAY_NAME, "fishbot_log_" + System.currentTimeMillis() + ".csv")
+            cv.put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+            cv.put(MediaStore.MediaColumns.RELATIVE_PATH, "Download")
+            val uri = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: return
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(sb.toString().toByteArray()) }
+        } catch (e: Throwable) {
+        }
+    }
+}
