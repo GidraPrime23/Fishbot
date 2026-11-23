@@ -11,7 +11,8 @@ class BotLoop(
     private val prefs: Prefs,
     private val onState: (String) -> Unit,
     private val onStop: (String) -> Unit,
-    private val onCatch: () -> Unit
+    private val onCatch: () -> Unit,
+    private val onTap: (Int, Int) -> Unit = { _, _ -> }
 ) {
     @Volatile
     var active = false
@@ -45,6 +46,12 @@ class BotLoop(
     }
 
     private fun now() = SystemClock.elapsedRealtime()
+
+    /** Тап с сообщением в панель (рисует кружок в точке нажатия). */
+    private fun tapAt(acc: BotAccessibilityService, x: Int, y: Int) {
+        onTap(x, y)
+        acc.tap(x.toFloat(), y.toFloat())
+    }
 
     private fun nap(ms: Long) {
         val end = now() + ms
@@ -99,7 +106,7 @@ class BotLoop(
 
             if (!bar && !bite) {
                 onState("заброс")
-                acc.tap(bx.toFloat(), by.toFloat())
+                tapAt(acc, bx, by)
                 nap(900)
                 onState("ожидание")
                 val t0 = now()
@@ -119,14 +126,14 @@ class BotLoop(
 
             if (bite) {
                 onState("подсечка")
-                acc.tap(bx.toFloat(), by.toFloat())
+                tapAt(acc, bx, by)
                 val t0 = now()
                 var retried = false
                 while (active && now() - t0 < 3500) {
                     nap(40)
                     if (peekBar(W, sc)) { bar = true; break }
                     if (!retried && now() - t0 > 1200 && peekBite(W, H, sc, bx, by)) {
-                        acc.tap(bx.toFloat(), by.toFloat()); retried = true
+                        tapAt(acc, bx, by); retried = true
                     }
                 }
                 if (!bar) continue

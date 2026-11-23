@@ -125,6 +125,11 @@ class FloatingService : Service() {
             background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xFF6EE7B7.toInt()) }
             setOnClickListener { toggle() }
         }
+        val tvTest = TextView(this).apply {
+            text = "⦿ тест тапа"; setTextColor(0xFF9AA4B2.toInt()); textSize = 11f; gravity = Gravity.CENTER
+            setPadding(0, dp(6), 0, 0)
+            setOnClickListener { testTap() }
+        }
         val tvCal = TextView(this).apply {
             text = "⌖ кнопка"; setTextColor(0xFF9AA4B2.toInt()); textSize = 11f; gravity = Gravity.CENTER
             setPadding(0, dp(6), 0, 0)
@@ -138,6 +143,7 @@ class FloatingService : Service() {
         panel.addView(tvTime)
         panel.addView(tvState)
         panel.addView(tvPlay, LinearLayout.LayoutParams(dp(44), dp(44)).apply { topMargin = dp(6) })
+        panel.addView(tvTest)
         panel.addView(tvCal)
         panel.addView(tvClose)
 
@@ -170,6 +176,52 @@ class FloatingService : Service() {
 
     private fun setState(s: String) { tvState.text = s }
 
+    private fun realSize(): Pair<Int, Int> {
+        val dm = DisplayMetrics()
+        @Suppress("DEPRECATION")
+        wm.defaultDisplay.getRealMetrics(dm)
+        return Pair(dm.widthPixels, dm.heightPixels)
+    }
+
+    /** Кружок поверх экрана в точке (x, y): видно, куда именно нажимает бот. */
+    private fun marker(x: Int, y: Int, color: Int) {
+        val r = dp(28)
+        val v = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setStroke(dp(4), color)
+                setColor(0x33FFFFFF)
+            }
+        }
+        val lp = WindowManager.LayoutParams(
+            2 * r, 2 * r,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            this.x = x - r
+            this.y = y - r
+        }
+        try {
+            wm.addView(v, lp)
+            ui.postDelayed({ try { wm.removeView(v) } catch (_: Exception) {} }, 900)
+        } catch (_: Exception) {}
+    }
+
+    /** Проверка без запуска бота: один тап по сохранённой точке + зелёный кружок. */
+    private fun testTap() {
+        if (!prefs.hasButton) { Toast.makeText(this, "Сначала ⌖ калибровка", Toast.LENGTH_SHORT).show(); return }
+        val (w, h) = realSize()
+        if (w < h) { Toast.makeText(this, "Поверните телефон в ландшафт", Toast.LENGTH_SHORT).show(); return }
+        val x = (prefs.btnX * w).toInt()
+        val y = (prefs.btnY * h).toInt()
+        marker(x, y, Color.GREEN)
+        setState("тап: $x,$y из ${w}×$h")
+        BotAccessibilityService.instance?.tap(x.toFloat(), y.toFloat())
+    }
+
     private fun elapsedMs() = accumulated + (if (loop?.active == true) SystemClock.elapsedRealtime() - startedAt else 0L)
 
     private val tick = object : Runnable {
@@ -192,7 +244,8 @@ class FloatingService : Service() {
             g, prefs,
             onState = { s -> ui.post { setState(s) } },
             onStop = { why -> ui.post { onBotStopped(why) } },
-            onCatch = { ui.post { catches++; tvTime.contentDescription = "улов $catches" } }
+            onCatch = { ui.post { catches++; tvTime.contentDescription = "улов $catches" } },
+            onTap = { x, y -> ui.post { marker(x, y, Color.RED) } }
         )
         loop = l
         startedAt = SystemClock.elapsedRealtime()
@@ -247,7 +300,8 @@ class FloatingService : Service() {
                     prefs.btnX = e.rawX / dm.widthPixels
                     prefs.btnY = e.rawY / dm.heightPixels
                     Toast.makeText(this, "Кнопка сохранена", Toast.LENGTH_SHORT).show()
-                    setState("готов")
+                    setState("кнопка: ${e.rawX.toInt()},${e.rawY.toInt()} из ${dm.widthPixels}×${dm.heightPixels}")
+                    marker(e.rawX.toInt(), e.rawY.toInt(), Color.CYAN)
                 }
                 try { wm.removeView(v) } catch (_: Exception) {}
                 calibView = null
