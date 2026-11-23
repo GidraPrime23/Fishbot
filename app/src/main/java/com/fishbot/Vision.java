@@ -124,6 +124,30 @@ public final class Vision {
         return new int[]{xl, xr, bTop, bBot + st - 1, kind};
     }
 
+
+    /** Y рыбки внутри зоны (светло-голубые пиксели) или NaN. Зона: {xl, xr, top, bottom}. */
+    public static double findFish(int[] px, int w, int h, int[] zone, double sc, double markerY) {
+        int st = sc > 0.6 ? 2 : 1;
+        int y0 = Math.max(0, zone[2]), y1 = Math.min(h - 1, zone[3]);
+        int x0 = Math.max(0, zone[0]), x1 = Math.min(w - 1, zone[1]);
+        double zc = (zone[2] + zone[3]) / 2.0, ex = 26 * sc;
+        if (!Double.isNaN(markerY) && Math.abs(markerY - zc) < ex + 12 * sc) return Double.NaN;
+        long sum = 0;
+        int cnt = 0;
+        for (int y = y0; y <= y1; y += st) {
+            if (!Double.isNaN(markerY) && Math.abs(y - markerY) < ex) continue;
+            int base = y * w;
+            for (int x = x0; x <= x1; x += st) {
+                int p = hsv(px[base + x]);
+                int hh = p >> 16, s = (p >> 8) & 255, v = p & 255;
+                if (hh >= 90 && hh <= 115 && s >= 10 && s <= 100 && v >= 150) { sum += y; cnt++; }
+            }
+        }
+        if (cnt < 12) return Double.NaN;
+        double fy = (double) sum / cnt;
+        if (Math.abs(fy - zc) > 0.25 * (zone[3] - zone[2])) return Double.NaN;
+        return fy;
+    }
     /** Y жёлтой линии поплавка рядом с зоной или NaN. Зона: {xl, xr, top, bottom}. */
     public static double findMarker(int[] px, int w, int h, int[] zone, double sc) {
         int zw = zone[1] - zone[0] + 1;

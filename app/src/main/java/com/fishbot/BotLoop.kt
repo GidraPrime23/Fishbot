@@ -160,7 +160,7 @@ class BotLoop(
         val sx0 = maxOf(0, z0[0] - zw)
         val sx1 = minOf(W - 1, z0[1] + zw)
         val sw = sx1 - sx0 + 1
-        val tp = HoldPilot()
+        val tp = HoldPilot(); var fOff = 0.0
         val trk = Tracker()
         FlightLog.start()
         var last: IntArray? = null
@@ -187,7 +187,7 @@ class BotLoop(
                     val zk = if (lz.size > 4) lz[4] else -1
                     if (!m.isNaN()) {
                         lastOk = t
-                        val hms = tp.decide(t / 1000.0, m, lz[2].toDouble(), lz[3].toDouble(), Double.NaN); val hold = hms > 0
+                        val fy = Vision.findFish(px, sw, h, lz, sc, m); if (!fy.isNaN()) fOff += 0.2 * ((fy - (lz[2] + lz[3]) / 2.0) - fOff); val aim = (lz[2] + lz[3]) / 2.0 + fOff; val hms = tp.decide(t / 1000.0, m, lz[2].toDouble(), lz[3].toDouble(), aim); val hold = hms > 0
                         if (hold && acc.pulse(bx.toFloat(), by.toFloat(), hms.toLong())) tp.pressed(t / 1000.0, hms)
                         FlightLog.row("${t - tStart},${m.toInt()},${lz[2]},${lz[3]},${tp.v.toInt()},${tp.p.toInt()},$hms,${t - prevT},${trk.state},${trk.bands},$zk")
                     } else {
