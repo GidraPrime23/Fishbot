@@ -201,6 +201,7 @@ class BotLoop(
                 }
                 prevT = t
                 if (t - lastOk > 800) break
+            if (t - tStart > 40000) break
             }
         } finally {
             acc.setHold(false, bx.toFloat(), by.toFloat())
