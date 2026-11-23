@@ -11,7 +11,7 @@ object FlightLog {
     @Synchronized
     fun start() {
         sb.setLength(0)
-        sb.append("t_ms,marker,zTop,zBot,v,p,cmd,dt_ms\n")
+        sb.append("t_ms,marker,zTop,zBot,v,p,cmd,dt_ms,st,bands,zk\n")
     }
 
     @Synchronized

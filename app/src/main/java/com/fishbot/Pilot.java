@@ -51,6 +51,8 @@ public final class Pilot {
         return holding;
     }
 
+    public boolean holding() { return holding; }
+
     public boolean lost(double t) {
         if (Double.isNaN(lastSeen) || t - lastSeen > 0.15) {
             if (holding) { holding = false; lastFlip = t; }

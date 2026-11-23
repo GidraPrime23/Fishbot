@@ -161,6 +161,7 @@ class BotLoop(
         val sx1 = minOf(W - 1, z0[1] + zw)
         val sw = sx1 - sx0 + 1
         ctl.reset()
+        val trk = Tracker()
         FlightLog.start()
         var last: IntArray? = null
         var lastZoneT = 0L
@@ -182,20 +183,21 @@ class BotLoop(
                 if (z != null) { last = z; lastZoneT = t }
                 val lz = last
                 if (lz != null && t - lastZoneT < 600) {
-                    val m = Vision.findMarker(px, sw, h, lz, sc)
+                    val m = trk.find(px, sw, h, lz, sc, t, ctl.holding())
+                    val zk = if (lz.size > 4) lz[4] else -1
                     if (!m.isNaN()) {
                         lastOk = t
                         val hold = ctl.decide(t / 1000.0, m, lz[2].toDouble(), lz[3].toDouble())
                         acc.setHold(hold, bx.toFloat(), by.toFloat())
-                        FlightLog.row("${t - tStart},${m.toInt()},${lz[2]},${lz[3]},${ctl.v.toInt()},${ctl.p.toInt()},${if (hold) 1 else 0},${t - prevT}")
+                        FlightLog.row("${t - tStart},${m.toInt()},${lz[2]},${lz[3]},${ctl.v.toInt()},${ctl.p.toInt()},${if (hold) 1 else 0},${t - prevT},${trk.state},${trk.bands},$zk")
                     } else {
                         val hold = ctl.lost(t / 1000.0)
                         acc.setHold(hold, bx.toFloat(), by.toFloat())
-                        FlightLog.row("${t - tStart},NaN,${lz[2]},${lz[3]},0,0,${if (hold) 1 else 0},${t - prevT}")
+                        FlightLog.row("${t - tStart},NaN,${lz[2]},${lz[3]},0,0,${if (hold) 1 else 0},${t - prevT},${trk.state},${trk.bands},$zk")
                     }
                 } else {
                     acc.setHold(false, bx.toFloat(), by.toFloat())
-                    FlightLog.row("${t - tStart},NOZONE,0,0,0,0,0,${t - prevT}")
+                    FlightLog.row("${t - tStart},NOZONE,0,0,0,0,0,${t - prevT},9,,0")
                 }
                 prevT = t
                 if (t - lastOk > 800) break
