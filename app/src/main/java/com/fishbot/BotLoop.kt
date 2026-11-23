@@ -182,7 +182,7 @@ class BotLoop(
                 val z = Vision.findZone(px, sw, h, sc)
                 if (z != null) { last = z; lastZoneT = t }
                 val lz = last
-                if (lz != null && t - lastZoneT < 600) {
+                if (lz != null && t - lastZoneT < 1000) {
                     val m = trk.find(px, sw, h, lz, sc, t, false)
                     val zk = if (lz.size > 4) lz[4] else -1
                     if (!m.isNaN()) {
