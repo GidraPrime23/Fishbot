@@ -2,7 +2,7 @@ package com.fishbot;
 
 public final class HoldPilot {
     public double lat = 0.10, up = 70, band = 0.05, win = 0.16, k = 0.8;
-    public int minMs = 80, maxMs = 1000;
+    public int minMs = 80, maxMs = 1500;
     public double v = 0, vm = 0, p = 0;
     private final double[] ts = new double[16], ms = new double[16], gs = new double[16];
     private int n = 0;
