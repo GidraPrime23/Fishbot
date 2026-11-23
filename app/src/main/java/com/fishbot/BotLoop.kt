@@ -181,7 +181,7 @@ class BotLoop(
                     lastOk = t
                     val hold = ctl.decide(t / 1000.0, m, lz[2].toDouble(), lz[3].toDouble())
                     acc.setHold(hold, bx.toFloat(), by.toFloat())
-                }
+                } else { acc.setHold(ctl.lost(t / 1000.0), bx.toFloat(), by.toFloat()) }
             }
             if (t - lastOk > 800) break
         }

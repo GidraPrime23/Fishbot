@@ -152,19 +152,52 @@ public final class Vision {
 
     /** Регулятор: true = держать кнопку (поплавок вверх), false = отпустить. */
     public static final class Controller {
-        public double kd = 0.12, deadband = 0.0, smooth = 0.5;
-        private double prevT = Double.NaN, prevY, v;
+        /** kd - упреждение (сек) на задержку; для отпускания берётся kd + 0.05. */
+        public double kd = 0.30, deadband = 0.03, smooth = 0.4;
+        private double prevT = Double.NaN, prevY = Double.NaN, v = 0, tgt = Double.NaN, lastFlip = -1e9;
+        private boolean holding = false;
 
-        public void reset() { prevT = Double.NaN; v = 0; }
+        public void reset() {
+            prevT = Double.NaN; prevY = Double.NaN; v = 0; tgt = Double.NaN;
+            holding = false; lastFlip = -1e9;
+        }
 
+        /** true = держать кнопку (поплавок вверх), false = отпустить. Цель - центр зоны. */
         public boolean decide(double t, double marker, double zTop, double zBot) {
+            double h = zBot - zTop;
             double target = (zTop + zBot) / 2.0;
-            if (!Double.isNaN(prevT) && t > prevT) {
-                double inst = (marker - prevY) / (t - prevT); // px/с, вниз = плюс
+            tgt = target;
+            if (Double.isNaN(prevT)) {
+                prevT = t; prevY = marker;
+            } else if (t - prevT >= 0.005) {
+                double inst = (marker - prevY) / (t - prevT);
                 v = smooth * v + (1 - smooth) * inst;
+                prevT = t; prevY = marker;
             }
-            prevT = t; prevY = marker;
-            return (marker - target) + kd * v > deadband * (zBot - zTop);
+            double lead = holding ? kd + 0.05 : kd;
+            double shift = Math.max(-1.5 * h, Math.min(1.5 * h, v * lead));
+            double p = marker + shift;
+            double e = p - target;
+            double band = deadband * h;
+            boolean want;
+            if (p < zTop) want = false;
+            else if (p > zBot) want = true;
+            else if (holding) want = !(e < -band);
+            else want = e > band;
+            if (want != holding) {
+                boolean urgent = p < zTop || p > zBot;
+                if (urgent || t - lastFlip >= 0.06) { holding = want; lastFlip = t; }
+            }
+            return holding;
+        }
+
+        /** Поплавок не найден на кадре: оцениваем, где он, и не держим вслепую. */
+        public boolean lost(double t) {
+            if (Double.isNaN(prevT) || Double.isNaN(tgt)) return false;
+            double dt = Math.min(0.4, Math.max(0.0, t - prevT));
+            boolean want = (prevY + v * dt) > tgt;
+            if (want != holding) { holding = want; lastFlip = t; }
+            return holding;
         }
     }
 }
