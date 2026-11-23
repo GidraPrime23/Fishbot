@@ -63,7 +63,7 @@ class FloatingService : Service() {
         prefs = Prefs(this)
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         startForegroundCompat()
-        if (!Gate.isUnlocked(this)) { stopSelf(); return START_NOT_STICKY }
+        if (!Gate.isUnlocked(this) || !License.isActive(this)) { stopSelf(); return START_NOT_STICKY }
 
         val code = intent?.getIntExtra(EXTRA_CODE, 0) ?: 0
         @Suppress("DEPRECATION")
@@ -78,6 +78,7 @@ class FloatingService : Service() {
         projection = p
         grabber = ScreenGrabber(this, p)
         running = true
+        License.startHeartbeat(this) { ui.post { stopSelf() } }
         showBubble()
         return START_NOT_STICKY
     }
