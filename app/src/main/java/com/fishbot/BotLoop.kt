@@ -160,7 +160,7 @@ class BotLoop(
         val sx0 = maxOf(0, z0[0] - zw)
         val sx1 = minOf(W - 1, z0[1] + zw)
         val sw = sx1 - sx0 + 1
-        val tp = TapPilot()
+        val tp = HoldPilot()
         val trk = Tracker()
         FlightLog.start()
         var last: IntArray? = null
@@ -187,9 +187,9 @@ class BotLoop(
                     val zk = if (lz.size > 4) lz[4] else -1
                     if (!m.isNaN()) {
                         lastOk = t
-                        val hold = tp.decide(t / 1000.0, m, lz[2].toDouble(), lz[3].toDouble())
-                        if (hold) acc.pulse(bx.toFloat(), by.toFloat())
-                        FlightLog.row("${t - tStart},${m.toInt()},${lz[2]},${lz[3]},${tp.v.toInt()},${tp.p.toInt()},${if (hold) 1 else 0},${t - prevT},${trk.state},${trk.bands},$zk")
+                        val hms = tp.decide(t / 1000.0, m, lz[2].toDouble(), lz[3].toDouble(), Double.NaN); val hold = hms > 0
+                        if (hold && acc.pulse(bx.toFloat(), by.toFloat(), hms.toLong())) tp.pressed(t / 1000.0, hms)
+                        FlightLog.row("${t - tStart},${m.toInt()},${lz[2]},${lz[3]},${tp.v.toInt()},${tp.p.toInt()},$hms,${t - prevT},${trk.state},${trk.bands},$zk")
                     } else {
                         val hold = false
                         if (hold) acc.pulse(bx.toFloat(), by.toFloat())

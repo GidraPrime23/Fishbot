@@ -49,12 +49,13 @@ class BotAccessibilityService : AccessibilityService() {
 
     @Volatile private var pulseBusy = false
     private var pulseT = 0L
+    private var pulseMs = 60L
 
     /** Одиночный короткий тап без удержания. false, если предыдущий ещё идёт. */
     fun pulse(x: Float, y: Float, ms: Long = 60): Boolean {
-        if (pulseBusy && System.currentTimeMillis() - pulseT < 500) return false
+        if (pulseBusy && System.currentTimeMillis() - pulseT < pulseMs + 400) return false
         pulseBusy = true
-        pulseT = System.currentTimeMillis()
+        pulseT = System.currentTimeMillis(); pulseMs = ms
         return try {
             val p = Path().apply { moveTo(x, y) }
             val g = GestureDescription.Builder().addStroke(StrokeDescription(p, 0, ms)).build()
