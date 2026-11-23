@@ -113,17 +113,18 @@ object License {
 
     private fun loop(app: Context, onDenied: () -> Unit) {
         var fails = 0
+        var first = true
         while (FloatingService.running) {
             val key = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(K_KEY, null)
             if (key == null) { onDenied(); return }
             val r = touch(app, key)
             if (r == Res.OK) {
-                fails = 0
+                fails = 0; first = false
             } else if (r == Res.BLOCKED) {
                 revoke(app); onDenied(); return
             } else {
                 fails++
-                if (fails >= MAX_FAILS) { onDenied(); return }
+                if (first || fails >= MAX_FAILS) { onDenied(); return }
             }
             try { Thread.sleep(PERIOD_MS) } catch (e: InterruptedException) { return }
         }
