@@ -153,7 +153,12 @@ class MainActivity : Activity() {
         val ov = Settings.canDrawOverlays(this)
         tvOverlay.text = if (ov) "✓ Поверх окон: разрешено" else "✗ Поверх окон: не разрешено"
         val acc = BotAccessibilityService.instance != null
+        val listed = try {
+            (Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: "")
+                .contains("com.fishbot/")
+        } catch (e: Exception) { false }
         tvAcc.text = if (acc) "✓ Спецвозможности: включены"
+        else if (listed) "⚠ Служба слетела: переключатель включён, но служба не работает. Настройки → Спецвозможности → FishBot → выключите и включите переключатель. Не смахивайте FishBot из последних."
         else "✗ Спецвозможности: выключены (на Android 13+ для установленного вручную приложения " +
             "сначала разрешите «ограниченные настройки» в Настройки → Приложения → FishBot → ⋮)"
     }
