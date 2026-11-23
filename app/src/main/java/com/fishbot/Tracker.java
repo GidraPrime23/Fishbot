@@ -50,7 +50,7 @@ public final class Tracker {
             }
             if (hit) { if (gS < 0) gS = yy; gE = yy; }
             else if (gS >= 0) {
-                if (gE - gS < maxThick && nb < 8) cs[nb++] = (gS + gE) / 2.0;
+                if (gE - gS < maxThick && nb < 8 && (gS + gE) / 2.0 <= (BOT + 10) * sc) cs[nb++] = (gS + gE) / 2.0;
                 gS = -1;
             }
         }
