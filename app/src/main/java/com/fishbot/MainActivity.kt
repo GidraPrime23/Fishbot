@@ -69,6 +69,7 @@ class MainActivity : Activity() {
         }
 
         col.addView(title("FishBot — автоматическая рыбалка").apply { setOnLongClickListener { prefs.logs = !prefs.logs; toast(if (prefs.logs) "Логи: вкл" else "Логи: выкл"); true } })
+        col.addView(TextView(this).apply { text = "⚠ Не закрывайте приложение полностью («закрыть все», смахивание). Если закрыли — выдайте FishBot специальные возможности заново: выключите и включите переключатель. Служба сбросится или будет работать некорректно."; textSize = 15f; setTextColor(android.graphics.Color.parseColor("#D00000")); setTypeface(null, android.graphics.Typeface.BOLD); setPadding(0, 12, 0, 12) })
 
         tvOverlay = note("")
         col.addView(tvOverlay)
