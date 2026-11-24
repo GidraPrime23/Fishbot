@@ -164,6 +164,20 @@ class MainActivity : Activity() {
         tvAcc.append(lastExitInfo().let { if (it.isEmpty()) "" else "\n" + it })
     }
 
+    private var leavingToSystem = false
+
+    @Suppress("DEPRECATION")
+    override fun startActivityForResult(intent: android.content.Intent, requestCode: Int, options: android.os.Bundle?) {
+        leavingToSystem = true
+        super.startActivityForResult(intent, requestCode, options)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (leavingToSystem) { leavingToSystem = false; return }
+        if (!isChangingConfigurations) finishAndRemoveTask()
+    }
+
     private fun lastExitInfo(): String {
         if (android.os.Build.VERSION.SDK_INT < 30) return ""
         return try {
