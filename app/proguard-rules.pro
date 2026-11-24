@@ -1,2 +1,4 @@
 -keep class com.fishbot.BotAccessibilityService { *; }
 -keep class com.fishbot.BotState { *; }
+-renamesourcefileattribute SourceFile
+-keepattributes !SourceFile,!LineNumberTable
