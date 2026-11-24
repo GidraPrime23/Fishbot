@@ -161,6 +161,30 @@ class MainActivity : Activity() {
         else if (listed) "⚠ Служба слетела: переключатель включён, но служба не работает. Настройки → Спецвозможности → FishBot → выключите и включите переключатель. Не смахивайте FishBot из последних."
         else "✗ Спецвозможности: выключены (на Android 13+ для установленного вручную приложения " +
             "сначала разрешите «ограниченные настройки» в Настройки → Приложения → FishBot → ⋮)"
+        tvAcc.append(lastExitInfo().let { if (it.isEmpty()) "" else "\n" + it })
+    }
+
+    private fun lastExitInfo(): String {
+        if (android.os.Build.VERSION.SDK_INT < 30) return ""
+        return try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val e = am.getHistoricalProcessExitReasons(packageName, 0, 1).firstOrNull()
+                ?: return "Последний выход процесса: нет данных"
+            val r = when (e.reason) {
+                android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "USER_REQUESTED (force-stop/смахивание)"
+                android.app.ApplicationExitInfo.REASON_SIGNALED -> "SIGNALED (убит сигналом)"
+                android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "LOW_MEMORY"
+                android.app.ApplicationExitInfo.REASON_CRASH -> "CRASH (падение)"
+                android.app.ApplicationExitInfo.REASON_ANR -> "ANR"
+                android.app.ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "PERMISSION_CHANGE"
+                android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "EXCESSIVE_RESOURCE_USAGE"
+                android.app.ApplicationExitInfo.REASON_OTHER -> "OTHER"
+                else -> "код ${e.reason}"
+            }
+            val t = java.text.SimpleDateFormat("dd.MM HH:mm:ss", java.util.Locale.getDefault())
+                .format(java.util.Date(e.timestamp))
+            "Последний выход процесса: $r, $t (${e.description ?: "-"})"
+        } catch (ex: Exception) { "" }
     }
 
     private fun start() {
