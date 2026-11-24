@@ -1,14 +1,14 @@
 package com.fishbot;
-
 public final class HoldPilot {
     public double lat = 0.10, up = 70, band = 0.05, win = 0.16, k = 0.8;
-    public int minMs = 80, maxMs = 1500;
+    public int minMs = 80, maxMs = 700;
     public double v = 0, vm = 0, p = 0;
     private final double[] ts = new double[16], ms = new double[16], gs = new double[16];
     private int n = 0;
     private double pStart = -1e9, pEnd = -1e9;
+    private int streak = 0;
 
-    public void reset() { n = 0; v = 0; vm = 0; p = 0; pStart = -1e9; pEnd = -1e9; }
+    public void reset() { n = 0; v = 0; vm = 0; p = 0; pStart = -1e9; pEnd = -1e9; streak = 0; }
 
     public void pressed(double t, int dur) { pStart = t; pEnd = t + dur / 1000.0; }
 
@@ -41,11 +41,14 @@ public final class HoldPilot {
             if (den > 1e-9) { vm = a / den; v = (a - b) / den; }
         }
         if (t > pStart + 0.25 && t < pEnd) up += 0.05 * (cl(-vm, 20, 150) - up);
-        if (t < pEnd + 0.03) return 0;
         p = (marker - g) + cl(v, -150, 150) * lat;
+        if (t < pEnd + 0.03) return 0;
         double need = p - band * h;
-        if (need <= 0) return 0;
+        if (need <= 0) { streak = 0; return 0; }
         int d = (int) Math.round(need / Math.max(30, up) * 1000 * k);
-        return (int) cl(d, minMs, maxMs);
+        d = (int) cl(d, minMs, maxMs);
+        if (streak >= 2) d = Math.max(minMs, d / 2);
+        if (d >= (int) (0.9 * maxMs)) streak++; else streak = 0;
+        return d;
     }
 }
