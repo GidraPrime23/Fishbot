@@ -147,9 +147,19 @@ class MainActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(col) })
     }
 
+    private var resumeAt = 0L
+
     override fun onResume() {
         super.onResume()
         if (!Gate.isUnlocked(this) || !License.isActive(this)) return
+        resumeAt = System.currentTimeMillis()
+        val self = java.lang.ref.WeakReference(this)
+        BotState.listener = { self.get()?.let { if (!it.isFinishing && !it.isDestroyed) it.refreshStatus() } }
+        refreshStatus()
+        tvAcc.postDelayed({ if (!isFinishing && !isDestroyed) refreshStatus() }, 6200)
+    }
+
+    private fun refreshStatus() {
         val ov = Settings.canDrawOverlays(this)
         tvOverlay.text = if (ov) "✓ Поверх окон: разрешено" else "✗ Поверх окон: не разрешено"
         val acc = BotAccessibilityService.instance != null
@@ -158,6 +168,7 @@ class MainActivity : Activity() {
                 .contains("com.fishbot/")
         } catch (e: Exception) { false }
         tvAcc.text = if (acc) "✓ Спецвозможности: включены"
+        else if (listed && System.currentTimeMillis() - resumeAt < 6000) "⏳ Служба подключается… подождите несколько секунд"
         else if (listed) "⚠ Служба слетела: переключатель включён, но служба не работает. Настройки → Спецвозможности → FishBot → выключите и включите переключатель. Не смахивайте FishBot из последних."
         else "✗ Спецвозможности: выключены (на Android 13+ для установленного вручную приложения " +
             "сначала разрешите «ограниченные настройки» в Настройки → Приложения → FishBot → ⋮)"

@@ -30,11 +30,13 @@ class BotAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        BotState.notifyChanged()
         CrashGuard.install(applicationContext)
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         instance = null
+        BotState.notifyChanged()
         return super.onUnbind(intent)
     }
 
