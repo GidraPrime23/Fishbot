@@ -179,16 +179,16 @@ class RodSwap(
         val cols = doubleArrayOf(0.168, 0.248, 0.328, 0.409, 0.488)
         val rows = doubleArrayOf(0.675, 0.852)
         var best: IntArray? = null
-        var bestScore = 16f
+        var bestScore = 16f; var bestRun = 0
         for (ri in rows.indices) for (ci in cols.indices) {
             val cx = (cols[ci] * W).toInt(); val cy = (rows[ri] * H).toInt()
             val lx = cx - gx0; val ly = cy - gy0
-            val run = barRun(px, pw, ph, lx - (0.028 * W).toInt(), lx + (0.028 * W).toInt(),
+            val run = barRunAny(px, pw, ph, lx - (0.028 * W).toInt(), lx + (0.028 * W).toInt(),
                 ly + (0.048 * H).toInt(), ly + (0.074 * H).toInt())
             val f = icon(px, pw, ph, lx, ly - (0.0139 * H).toInt(), (0.0328 * W).toInt(), (0.059 * H).toInt())
             val sc = if (f != null) score(f) else 99f
-            log("cell,$ri,$ci,bar=$run,score=${"%.1f".format(sc)}")
-            if (run >= 0.006 * W && sc < bestScore) { bestScore = sc; best = intArrayOf(cx, cy) }
+            log("cell,$ri,$ci,bar=$run,score=${"%.1f".format(sc)},rgb=${barRgb(px, pw, ph, lx - (0.028 * W).toInt(), lx + (0.028 * W).toInt(), ly + (0.048 * H).toInt(), ly + (0.074 * H).toInt())}")
+            if (run >= 0.006 * W && sc < 16f && (run > bestRun || (run == bestRun && sc < bestScore))) { bestRun = run; bestScore = sc; best = intArrayOf(cx, cy) }
         }
         return best
     }
@@ -259,7 +259,7 @@ class RodSwap(
     fun swap(acc: BotAccessibilityService): Boolean {
         val t = now()
         swaps.removeAll { t - it > 20 * 60 * 1000L }
-        if (swaps.size >= 4) { onState("удочки ломаются слишком часто"); return false }
+        if (swaps.size >= 4) { lastWhy = "удочки ломаются слишком часто"; onState("удочки ломаются слишком часто"); return false }
         swaps.add(t)
         FlightLog.start("ROD")
         var why = "fail"
@@ -271,6 +271,7 @@ class RodSwap(
             tapFrac(acc, 0.957, 0.905)   // центр круга-рюкзака (красный «!» правее и выше)
             if (!waitOpen(true, 2500)) { why = "инвентарь не открылся"; return false }
             nap(500)
+            val eqBefore = equippedRun()
             if (equippedGreen()) {                      // в руках целая удочка: тревога ложная, ничего не трогаем
                 why = "ok (тревога ложная)"
                 closeInventory(acc)
@@ -279,8 +280,8 @@ class RodSwap(
             val img = grab.latest()
             val rod = if (img != null) findGoodRod(img) else null
             if (rod == null) {
-                why = "нет целой удочки"
-                onState("нет целой удочки")
+                why = "нет годной удочки"
+                onState("нет годной удочки")
                 closeInventory(acc)
                 return false
             }
@@ -304,7 +305,7 @@ class RodSwap(
             log("tap_equip,${btn[0]},${btn[1]}")
             acc.tap(btn[0].toFloat(), btn[1].toFloat())
             nap(800)
-            val ok = equippedGreen()
+            val ok = equippedOk(eqBefore)
             if (!ok) {
                 why = "замена не подтвердилась"
                 onState("замена не подтвердилась")
@@ -314,12 +315,76 @@ class RodSwap(
             if (!closeInventory(acc)) { why = "инвентарь не закрылся"; return false }
             nap(600)
             why = "ok"
-            onState("удочка заменена")
+            onState("успешно одета удочка"); nap(1500)
             return true
         } finally {
             lastWhy = why
             FlightLog.save(acc, why, "rodswap")
         }
+    }
+
+    private fun isBarAny(c: Int): Boolean {
+        val r = (c shr 16) and 255; val g = (c shr 8) and 255; val b = c and 255
+        val mx = maxOf(r, g, b); val mn = minOf(r, g, b); val d = mx - mn
+        if (d == 0 || mx < 130) return false
+        if (255 * d / mx < 80) return false
+        val h = when (mx) {
+            r -> 60.0 * (((g - b).toDouble() / d + 6.0) % 6.0)
+            g -> 60.0 * (2.0 + (b - r).toDouble() / d)
+            else -> 60.0 * (4.0 + (r - g).toDouble() / d)
+        }
+        return h <= 100.0 || h >= 340.0
+    }
+
+    /** Как barRun, но полоска любого цвета (красный, оранжевый, жёлтый, зелёный). */
+    private fun barRunAny(px: IntArray, pw: Int, ph: Int, xa: Int, xb: Int, ya: Int, yb: Int): Int {
+        var best = 0
+        val x0 = maxOf(0, xa); val x1 = minOf(pw, xb)
+        for (y in maxOf(0, ya) until minOf(ph, yb)) {
+            var cur = 0
+            for (x in x0 until x1) {
+                if (isBarAny(px[y * pw + x])) { cur++; if (cur > best) best = cur } else cur = 0
+            }
+        }
+        return best
+    }
+
+    /** Средний цвет пикселей полоски (для лога), формат r|g|b. */
+    private fun barRgb(px: IntArray, pw: Int, ph: Int, xa: Int, xb: Int, ya: Int, yb: Int): String {
+        var n = 0L; var sr = 0L; var sg = 0L; var sb = 0L
+        for (y in maxOf(0, ya) until minOf(ph, yb)) {
+            for (x in maxOf(0, xa) until minOf(pw, xb)) {
+                val c = px[y * pw + x]
+                if (isBarAny(c)) { n++; sr += (c shr 16) and 255; sg += (c shr 8) and 255; sb += c and 255 }
+            }
+        }
+        return if (n == 0L) "-" else "${sr / n}|${sg / n}|${sb / n}"
+    }
+
+    /** Длина полоски под слотом экипировки (любой цвет), -1 если кадра нет. */
+    private fun equippedRun(): Int {
+        val img = grab.latest() ?: return -1
+        val W = img.width; val H = img.height
+        val x0 = (0.52 * W).toInt(); val y0 = (0.25 * H).toInt()
+        val w = (0.12 * W).toInt(); val h = (0.18 * H).toInt()
+        val px = grab.region(img, x0, y0, w, h)
+        val cw = minOf(w, img.width - x0)
+        if (cw <= 0) return -1
+        val ch = px.size / cw
+        val cx = (0.580 * W).toInt() - x0; val cy = (0.295 * H).toInt() - y0
+        val run = barRunAny(px, cw, ch, cx - (0.028 * W).toInt(), cx + (0.028 * W).toInt(),
+            cy + (0.040 * H).toInt(), cy + (0.068 * H).toInt())
+        log("equipped_any,bar=$run,rgb=${barRgb(px, cw, ch, cx - (0.028 * W).toInt(), cx + (0.028 * W).toInt(), cy + (0.040 * H).toInt(), cy + (0.068 * H).toInt())}")
+        return run
+    }
+
+    /** Надета ли новая удочка: полоска есть и длиннее, чем была до замены. */
+    private fun equippedOk(before: Int): Boolean {
+        val W = grab.latest()?.width ?: return false
+        val run = equippedRun()
+        val need = maxOf((0.006 * W).toInt(), before + (0.003 * W).toInt())
+        log("equip_check,before=$before,after=$run,need=$need")
+        return run >= need
     }
 
     private fun closeInventory(acc: BotAccessibilityService): Boolean {

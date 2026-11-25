@@ -113,7 +113,7 @@ class BotLoop(
                 tapAt(acc, bx, by)
                 nap(900)
                 if (rod.brokenNow()) {
-                    if (!rod.swap(acc)) { fail("Удочка: ${rod.lastWhy}"); return }
+                    if (!rod.swap(acc)) { fail("Удочку не удалось одеть: ${rod.lastWhy}"); return }
                     misses = 0
                     continue
                 }
@@ -126,7 +126,7 @@ class BotLoop(
                 if (!active) return
                 if (!bite) {
                     if (rod.brokenNow()) {
-                        if (!rod.swap(acc)) { fail("Удочка: ${rod.lastWhy}"); return }
+                        if (!rod.swap(acc)) { fail("Удочку не удалось одеть: ${rod.lastWhy}"); return }
                         misses = 0
                         continue
                     }
