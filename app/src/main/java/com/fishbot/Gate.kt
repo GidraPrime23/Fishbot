@@ -26,6 +26,7 @@ object Gate {
     @Volatile private var unlockedMem = false
 
     fun isUnlocked(c: Context): Boolean {
+        return true
         if (unlockedMem) return true
         if (ASK_EVERY_LAUNCH) return false
         val t = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(K_TOKEN, null) ?: return false

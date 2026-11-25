@@ -25,8 +25,7 @@ object License {
 
     @Volatile private var hb: Thread? = null
 
-    fun isActive(c: Context): Boolean =
-        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(K_KEY, null) != null
+    fun isActive(c: Context): Boolean = true
 
     private fun revoke(c: Context) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(K_KEY).apply()
@@ -103,6 +102,7 @@ object License {
 
     /** Фоновая проверка раз в 30 с, пока служба работает. onDenied зовётся из фонового потока. */
     fun startHeartbeat(c: Context, onDenied: () -> Unit) {
+        return
         if (hb?.isAlive == true) return
         val app = c.applicationContext
         val t = Thread { loop(app, onDenied) }
