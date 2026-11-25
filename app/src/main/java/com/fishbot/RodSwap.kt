@@ -338,15 +338,19 @@ class RodSwap(
 
     /** Как barRun, но полоска любого цвета (красный, оранжевый, жёлтый, зелёный). */
     private fun barRunAny(px: IntArray, pw: Int, ph: Int, xa: Int, xb: Int, ya: Int, yb: Int): Int {
-        var best = 0
+        // полоска = цвет держится минимум в 5 строках; тонкая подсветка слота (около 3 строк) не считается
         val x0 = maxOf(0, xa); val x1 = minOf(pw, xb)
+        val rowBest = ArrayList<Int>()
         for (y in maxOf(0, ya) until minOf(ph, yb)) {
-            var cur = 0
+            var cur = 0; var best = 0
             for (x in x0 until x1) {
                 if (isBarAny(px[y * pw + x])) { cur++; if (cur > best) best = cur } else cur = 0
             }
+            rowBest.add(best)
         }
-        return best
+        if (rowBest.size < 5) return 0
+        rowBest.sortDescending()
+        return rowBest[4]
     }
 
     /** Средний цвет пикселей полоски (для лога), формат r|g|b. */
