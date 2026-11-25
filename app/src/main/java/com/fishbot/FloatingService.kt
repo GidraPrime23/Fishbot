@@ -123,7 +123,7 @@ class FloatingService : Service() {
             }
         }
         tvTime = TextView(this).apply { text = "0:00"; setTextColor(Color.WHITE); textSize = 16f; gravity = Gravity.CENTER }
-        tvState = TextView(this).apply { text = "готов"; setTextColor(0xFF9AA4B2.toInt()); textSize = 11f; gravity = Gravity.CENTER }
+        tvState = TextView(this).apply { text = "готов"; setTextColor(0xFF9AA4B2.toInt()); textSize = 11f; gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP; setLines(4) }
         tvPlay = TextView(this).apply {
             text = "▶"; setTextColor(Color.BLACK); textSize = 20f; gravity = Gravity.CENTER
             background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xFF6EE7B7.toInt()) }
@@ -145,7 +145,7 @@ class FloatingService : Service() {
             setOnClickListener { stopSelf() }
         }
         panel.addView(tvTime)
-        panel.addView(tvState)
+        panel.addView(tvState, LinearLayout.LayoutParams(dp(120), LinearLayout.LayoutParams.WRAP_CONTENT))
         panel.addView(tvPlay, LinearLayout.LayoutParams(dp(44), dp(44)).apply { topMargin = dp(6) })
         panel.addView(tvTest)
         panel.addView(tvCal)
