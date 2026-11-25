@@ -18,6 +18,7 @@ class BotLoop(
     var active = false
         private set
     private var zoneAbs: IntArray? = null   // {xl, xr, top, bottom} в координатах экрана
+    private val rod = RodSwap(grab, onState) { active }
 
     fun start() {
         if (active) return
@@ -110,6 +111,11 @@ class BotLoop(
                 onState("заброс")
                 tapAt(acc, bx, by)
                 nap(900)
+                if (rod.brokenNow()) {
+                    if (!rod.swap(acc)) { fail("Удочка: ${rod.lastWhy}"); return }
+                    misses = 0
+                    continue
+                }
                 onState("ожидание")
                 val t0 = now()
                 while (active && now() - t0 < prefs.biteTimeoutSec * 1000L) {
@@ -118,6 +124,11 @@ class BotLoop(
                 }
                 if (!active) return
                 if (!bite) {
+                    if (rod.brokenNow()) {
+                        if (!rod.swap(acc)) { fail("Удочка: ${rod.lastWhy}"); return }
+                        misses = 0
+                        continue
+                    }
                     misses++
                     if (misses >= prefs.maxMiss) { fail("Нет поклёвок $misses раз подряд"); return }
                     onState("нет поклёвки")
