@@ -7,6 +7,11 @@ public final class HoldPilot {
     private int n = 0;
     private double pStart = -1e9, pEnd = -1e9;
     private int streak = 0;
+    private boolean legacy = false;
+    public static int casts = 0;
+
+    public void setLegacy(boolean b) { legacy = b; maxMs = b ? 1500 : 700; }
+    public int streakNow() { return streak; }
 
     public void reset() { n = 0; v = 0; vm = 0; p = 0; pStart = -1e9; pEnd = -1e9; streak = 0; }
 
@@ -41,14 +46,17 @@ public final class HoldPilot {
             if (den > 1e-9) { vm = a / den; v = (a - b) / den; }
         }
         if (t > pStart + 0.25 && t < pEnd) up += 0.05 * (cl(-vm, 20, 150) - up);
-        p = (marker - g) + cl(v, -150, 150) * lat;
+        if (!legacy) p = (marker - g) + cl(v, -150, 150) * lat;
         if (t < pEnd + 0.03) return 0;
+        if (legacy) p = (marker - g) + cl(v, -150, 150) * lat;
         double need = p - band * h;
         if (need <= 0) { streak = 0; return 0; }
         int d = (int) Math.round(need / Math.max(30, up) * 1000 * k);
         d = (int) cl(d, minMs, maxMs);
-        if (streak >= 2) d = Math.max(minMs, d / 2);
-        if (d >= (int) (0.9 * maxMs)) streak++; else streak = 0;
+        if (!legacy) {
+            if (streak >= 2) d = Math.max(minMs, d / 2);
+            if (d >= (int) (0.9 * maxMs)) streak++; else streak = 0;
+        }
         return d;
     }
 }

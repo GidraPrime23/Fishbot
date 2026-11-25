@@ -8,11 +8,13 @@ import android.provider.MediaStore
 
 object FlightLog {
     private val sb = StringBuilder()
+    private var tag = ""
 
     @Synchronized
-    fun start() {
+    fun start(variant: String = "") {
         sb.setLength(0)
-        sb.append("t_ms,marker,zTop,zBot,v,p,cmd,dt_ms,st,bands,zk\n")
+        tag = variant
+        sb.append("t_ms,marker,zTop,zBot,v,p,cmd,dt_ms,st,bands,zk,up,streak,grab_dec_ms,t_send_ms,var\n")
     }
 
     @Synchronized
@@ -27,7 +29,7 @@ object FlightLog {
         if (!ctx.getSharedPreferences("fishbot", Context.MODE_PRIVATE).getBoolean("logs", false)) return
         try {
             val cv = ContentValues()
-            cv.put(MediaStore.MediaColumns.DISPLAY_NAME, "fishbot_log_" + System.currentTimeMillis() + ".csv")
+            cv.put(MediaStore.MediaColumns.DISPLAY_NAME, "fishbot_log_" + System.currentTimeMillis() + (if (tag.isEmpty()) "" else "_" + tag) + ".csv")
             cv.put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
             cv.put(MediaStore.MediaColumns.RELATIVE_PATH, "Download")
             val uri = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: return

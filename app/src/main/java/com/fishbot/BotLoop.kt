@@ -161,8 +161,12 @@ class BotLoop(
         val sx1 = minOf(W - 1, z0[1] + zw)
         val sw = sx1 - sx0 + 1
         val tp = HoldPilot(); var fOff = 0.0
+        val vOld = (HoldPilot.casts % 2 == 1)
+        HoldPilot.casts += 1
+        val vr = if (vOld) "OLD" else "NEW"
+        tp.setLegacy(vOld)
         val trk = Tracker()
-        FlightLog.start()
+        FlightLog.start(vr)
         var last: IntArray? = null
         var lastZoneT = 0L
         var lastOk = now()
@@ -176,7 +180,8 @@ class BotLoop(
                     if (now() - lastOk > 800) break
                     continue
                 }
-                val h = img.height
+                val tg = now()
+        val h = img.height
                 val px = grab.region(img, sx0, 0, sw, h)
                 val t = now()
                 val z = Vision.findZone(px, sw, h, sc)
@@ -188,16 +193,19 @@ class BotLoop(
                     if (!m.isNaN()) {
                         lastOk = t
                         val fy = Vision.findFish(px, sw, h, lz, sc, m); if (!fy.isNaN()) fOff += 0.2 * ((fy - (lz[2] + lz[3]) / 2.0) - fOff); val aim = (lz[2] + lz[3]) / 2.0 + fOff; val hms = tp.decide(t / 1000.0, m, lz[2].toDouble(), lz[3].toDouble(), aim); val hold = hms > 0
-                        if (hold && acc.pulse(bx.toFloat(), by.toFloat(), hms.toLong())) tp.pressed(t / 1000.0, hms)
-                        FlightLog.row("${t - tStart},${m.toInt()},${lz[2]},${lz[3]},${tp.v.toInt()},${tp.p.toInt()},$hms,${t - prevT},${trk.state},${trk.bands},$zk")
+                        val tDec = now() - tg
+        val sent = hold && acc.pulse(bx.toFloat(), by.toFloat(), hms.toLong())
+        val tSend = if (hold) now() - tStart else -1L
+        if (sent) tp.pressed(t / 1000.0, hms)
+                        FlightLog.row("${t - tStart},${m.toInt()},${lz[2]},${lz[3]},${tp.v.toInt()},${tp.p.toInt()},$hms,${t - prevT},${trk.state},${trk.bands},$zk,${tp.up.toInt()},${tp.streakNow()},$tDec,$tSend,$vr")
                     } else {
                         val hold = false
                         if (hold) acc.pulse(bx.toFloat(), by.toFloat())
-                        FlightLog.row("${t - tStart},NaN,${lz[2]},${lz[3]},0,0,${if (hold) 1 else 0},${t - prevT},${trk.state},${trk.bands},$zk")
+                        FlightLog.row("${t - tStart},NaN,${lz[2]},${lz[3]},0,0,${if (hold) 1 else 0},${t - prevT},${trk.state},${trk.bands},$zk,${tp.up.toInt()},${tp.streakNow()},-1,-1,$vr")
                     }
                 } else {
                     acc.setHold(false, bx.toFloat(), by.toFloat())
-                    FlightLog.row("${t - tStart},NOZONE,0,0,0,0,0,${t - prevT},9,,0")
+                    FlightLog.row("${t - tStart},NOZONE,0,0,0,0,0,${t - prevT},9,,0,${tp.up.toInt()},${tp.streakNow()},-1,-1,$vr")
                 }
                 prevT = t
                 if (t - lastOk > 800) break
