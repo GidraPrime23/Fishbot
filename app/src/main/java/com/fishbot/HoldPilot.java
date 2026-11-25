@@ -9,6 +9,8 @@ public final class HoldPilot {
     private int streak = 0;
     private boolean legacy = false;
     public static int casts = 0;
+    public double needLast = Double.NaN;
+    public int dRaw = 0;
 
     public void setLegacy(boolean b) { legacy = b; maxMs = b ? 1500 : 700; }
     public int streakNow() { return streak; }
@@ -20,6 +22,7 @@ public final class HoldPilot {
     private static double cl(double x, double a, double b) { return Math.max(a, Math.min(b, x)); }
 
     public int decide(double t, double marker, double zTop, double zBot, double aim) {
+        needLast = Double.NaN; dRaw = 0;
         double h = zBot - zTop;
         double g = Double.isNaN(aim) ? (zTop + zBot) / 2.0 : aim;
         if (n == 16) {
@@ -49,9 +52,9 @@ public final class HoldPilot {
         if (!legacy) p = (marker - g) + cl(v, -150, 150) * lat;
         if (t < pEnd + 0.03) return 0;
         if (legacy) p = (marker - g) + cl(v, -150, 150) * lat;
-        double need = p - band * h;
+        double need = p - band * h; needLast = need;
         if (need <= 0) { streak = 0; return 0; }
-        int d = (int) Math.round(need / Math.max(30, up) * 1000 * k);
+        int d = (int) Math.round(need / Math.max(30, up) * 1000 * k); dRaw = d;
         d = (int) cl(d, minMs, maxMs);
         if (!legacy) {
             if (streak >= 2) d = Math.max(minMs, d / 2);

@@ -14,7 +14,7 @@ object FlightLog {
     fun start(variant: String = "") {
         sb.setLength(0)
         tag = variant
-        sb.append("t_ms,marker,zTop,zBot,v,p,cmd,dt_ms,st,bands,zk,up,streak,grab_dec_ms,t_send_ms,var\n")
+        sb.append("t_ms,marker,zTop,zBot,v,p,cmd,dt_ms,st,bands,zk,up,streak,grab_dec_ms,t_send_ms,var,fish_y,f_off,aim,vm,zh,need,d_raw,zsz\n")
     }
 
     @Synchronized
@@ -23,13 +23,14 @@ object FlightLog {
     }
 
     @Synchronized
-    fun save(ctx: Context) {
+    fun save(ctx: Context, why: String = "", meta: String = "") {
         if (sb.length < 80) return
         if (Build.VERSION.SDK_INT < 29) return
         if (!ctx.getSharedPreferences("fishbot", Context.MODE_PRIVATE).getBoolean("logs", false)) return
         try {
+            sb.append("#META,model=").append(Build.MODEL).append(",sdk=").append(Build.VERSION.SDK_INT).append(",").append(meta).append(",why=").append(why).append("\n")
             val cv = ContentValues()
-            cv.put(MediaStore.MediaColumns.DISPLAY_NAME, "fishbot_log_" + System.currentTimeMillis() + (if (tag.isEmpty()) "" else "_" + tag) + ".csv")
+            cv.put(MediaStore.MediaColumns.DISPLAY_NAME, "fishbot_log_" + System.currentTimeMillis() + (if (tag.isEmpty()) "" else "_" + tag) + (if (why.isEmpty()) "" else "_" + why) + ".csv")
             cv.put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
             cv.put(MediaStore.MediaColumns.RELATIVE_PATH, "Download")
             val uri = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: return
