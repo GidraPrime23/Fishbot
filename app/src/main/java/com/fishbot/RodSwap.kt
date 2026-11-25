@@ -282,6 +282,7 @@ class RodSwap(
         FlightLog.start("ROD")
         var why = "fail"
         try {
+            FloatingService.panelPassThrough?.invoke(true)
             onState("удочка сломана")
             nap(1500)                                   // дождаться, пока плашки исчезнут
             if (inventoryOpen()) { why = "уже открыт инвентарь"; soft = true; swaps.remove(t); return false }
@@ -338,6 +339,7 @@ class RodSwap(
             onState("успешно одета удочка"); nap(1500)
             return true
         } finally {
+            FloatingService.panelPassThrough?.invoke(false)
             lastWhy = why
             lastDone = now()
             FlightLog.save(acc, why, "rodswap")

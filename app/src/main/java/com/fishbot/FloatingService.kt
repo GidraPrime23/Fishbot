@@ -36,6 +36,8 @@ class FloatingService : Service() {
         const val EXTRA_DATA = "data"
         @Volatile
         var running = false
+        @Volatile
+        var panelPassThrough: ((Boolean) -> Unit)? = null
     }
 
     private val ui = Handler(Looper.getMainLooper())
@@ -87,6 +89,7 @@ class FloatingService : Service() {
         running = false
         try { BotAccessibilityService.instance?.setHold(false, 0f, 0f) } catch (_: Throwable) {}
         try { loop?.stop() } catch (_: Throwable) {}
+        panelPassThrough = null
         try { root?.let { wm.removeView(it) } } catch (_: Exception) {}
         try { calibView?.let { wm.removeView(it) } } catch (_: Exception) {}
         try { grabber?.release() } catch (_: Throwable) {}
@@ -173,6 +176,15 @@ class FloatingService : Service() {
                 return true
             }
         })
+        panelPassThrough = { on ->
+            ui.post {
+                try {
+                    val f = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                    lp.flags = if (on) (lp.flags or f) else (lp.flags and f.inv())
+                    wm.updateViewLayout(panel, lp)
+                } catch (_: Exception) {}
+            }
+        }
         root = panel
         wm.addView(panel, lp)
         if (!prefs.hasButton) setState("нажмите ⌖ и коснитесь кнопки рыбалки")
