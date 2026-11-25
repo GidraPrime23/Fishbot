@@ -68,6 +68,7 @@ class BotLoop(
         val w = img.width - x0
         val px = grab.region(img, x0, 0, w, img.height)
         val z = Vision.findZone(px, w, img.height, sc) ?: return false
+        if (z[2] < 430 * sc || z[3] > 1010 * sc) return false
         zoneAbs = intArrayOf(z[0] + x0, z[1] + x0, z[2], z[3])
         return true
     }
@@ -196,7 +197,8 @@ class BotLoop(
         val h = img.height
                 val px = grab.region(img, sx0, 0, sw, h)
                 val t = now()
-                val z = Vision.findZone(px, sw, h, sc)
+                val zRaw = Vision.findZone(px, sw, h, sc)
+                val z = if (zRaw != null && (zRaw[2] < 430 * sc || zRaw[3] > 1010 * sc)) null else zRaw
                 if (z != null) { last = z; lastZoneT = t }
                 val lz = last
                 if (lz != null && t - lastZoneT < 1000) {

@@ -2,7 +2,7 @@ package com.fishbot;
 
 public final class Tracker {
     public static final double UP = 75, DOWN = 73, DELAY = 0.07;
-    public static final double TOP = 640, BOT = 1180;
+    public static final double TOP = 450, BOT = 1180;
     private double y = Double.NaN, tEst = 0, tGood = -1e9;
     private boolean curHold = false, prevHold = false, started = false;
     private double tChange = -1e9;
