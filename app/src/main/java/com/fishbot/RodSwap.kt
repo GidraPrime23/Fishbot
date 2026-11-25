@@ -193,6 +193,51 @@ class RodSwap(
         return best
     }
 
+    private fun isOlive(c: Int): Boolean {
+        val r = (c shr 16) and 255; val g = (c shr 8) and 255; val b = c and 255
+        return r in 70..120 && g in 88..135 && b in 35..85 && g > r && r > b && g - r in 8..32 && g - b >= 28
+    }
+
+    /**
+     * Кнопка «Надеть» (оливково-зелёная) на карточке предмета, которая открывается рядом с выбранным слотом.
+     * Ищем окно размером с кнопку с максимальной долей оливковых пикселей. Возвращает центр или null.
+     */
+    private fun findEquipButton(cx: Int, cy: Int): IntArray? {
+        val img = grab.latest() ?: return null
+        val W = img.width; val H = img.height
+        val x0 = maxOf(0, cx - (0.30 * W).toInt()); val x1 = minOf(W, cx + (0.20 * W).toInt())
+        val y0 = maxOf(0, cy - (0.34 * H).toInt()); val y1 = minOf(H, cy + (0.34 * H).toInt())
+        val rw = x1 - x0; val rh = y1 - y0
+        val bw = (0.094 * W).toInt(); val bh = (0.082 * H).toInt()
+        if (rw <= 0 || rh <= 0 || bw < 4 || bh < 4 || bw >= rw || bh >= rh) return null
+        val px = grab.region(img, x0, y0, rw, rh)
+        if (px.size < rw * rh) return null
+        val iw = rw + 1
+        val ii = IntArray((rh + 1) * iw)
+        for (y in 0 until rh) {
+            var row = 0
+            for (x in 0 until rw) {
+                if (isOlive(px[y * rw + x])) row++
+                ii[(y + 1) * iw + x + 1] = ii[y * iw + x + 1] + row
+            }
+        }
+        var best = 0; var bx = 0; var by = 0
+        var y = 0
+        while (y <= rh - bh) {
+            var x = 0
+            while (x <= rw - bw) {
+                val sum = ii[(y + bh) * iw + x + bw] - ii[y * iw + x + bw] - ii[(y + bh) * iw + x] + ii[y * iw + x]
+                if (sum > best) { best = sum; bx = x; by = y }
+                x += 2
+            }
+            y += 2
+        }
+        val fill = best.toDouble() / (bw * bh)
+        val tx = x0 + bx + bw / 2; val ty = y0 + by + bh / 2
+        log("equip_btn,fill=${"%.2f".format(fill)},at=$tx,$ty")
+        return if (fill >= 0.20) intArrayOf(tx, ty) else null
+    }
+
     /** Зелёная полоска в слоте экипировки (после замены должна появиться). */
     private fun equippedGreen(): Boolean {
         val img = grab.latest() ?: return false
@@ -242,7 +287,23 @@ class RodSwap(
             onState("надеваю удочку")
             log("tap_rod,${rod[0]},${rod[1]}")
             acc.tap(rod[0].toFloat(), rod[1].toFloat())
-            nap(700)
+            nap(500)                                    // открывается карточка предмета с кнопкой «Надеть»
+            var btn: IntArray? = null
+            val tb = now()
+            while (isActive() && now() - tb < 1800) {
+                btn = findEquipButton(rod[0], rod[1])
+                if (btn != null) break
+                nap(150)
+            }
+            if (btn == null) {
+                why = "кнопка Надеть не найдена"
+                onState("кнопка Надеть не найдена")
+                closeInventory(acc)
+                return false
+            }
+            log("tap_equip,${btn[0]},${btn[1]}")
+            acc.tap(btn[0].toFloat(), btn[1].toFloat())
+            nap(800)
             val ok = equippedGreen()
             if (!ok) {
                 why = "замена не подтвердилась"
