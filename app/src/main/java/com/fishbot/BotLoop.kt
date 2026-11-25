@@ -92,6 +92,7 @@ class BotLoop(
 
     private fun loop() {
         var misses = 0
+        var softFails = 0
         val ctl = Pilot()
         while (active) {
             val acc = BotAccessibilityService.instance
@@ -113,9 +114,9 @@ class BotLoop(
                 tapAt(acc, bx, by)
                 nap(900)
                 if (rod.brokenNow()) {
-                    if (!rod.swap(acc)) { fail("Удочку не удалось одеть: ${rod.lastWhy}"); return }
-                    misses = 0
-                    continue
+                    if (rod.swap(acc)) { softFails = 0; misses = 0; continue }
+                    if (rod.soft && ++softFails < 3) { /* ложная тревога: ловим дальше */ }
+                    else { fail("Удочку не удалось одеть: ${rod.lastWhy}"); return }
                 }
                 onState("ожидание")
                 val t0 = now()
@@ -126,9 +127,9 @@ class BotLoop(
                 if (!active) return
                 if (!bite) {
                     if (rod.brokenNow()) {
-                        if (!rod.swap(acc)) { fail("Удочку не удалось одеть: ${rod.lastWhy}"); return }
-                        misses = 0
-                        continue
+                        if (rod.swap(acc)) { softFails = 0; misses = 0; continue }
+                        if (rod.soft && ++softFails < 3) { /* ложная тревога: ловим дальше */ }
+                        else { fail("Удочку не удалось одеть: ${rod.lastWhy}"); return }
                     }
                     misses++
                     if (misses >= prefs.maxMiss) { fail("Нет поклёвок $misses раз подряд"); return }
@@ -137,6 +138,7 @@ class BotLoop(
                 }
             }
             misses = 0
+            softFails = 0
 
             if (bite) {
                 onState("подсечка")

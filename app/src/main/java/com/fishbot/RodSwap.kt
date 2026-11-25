@@ -18,6 +18,13 @@ class RodSwap(
 ) {
     private val swaps = ArrayList<Long>()
 
+    /** Когда закончилась последняя замена (любой исход): плашка «сломана» ещё гаснет. */
+    @Volatile private var lastDone = -100000L
+
+    /** true = последний swap() не начался (инвентарь не открылся/уже открыт): это ложная тревога, не авария. */
+    @Volatile var soft = false
+        private set
+
     /** Причина последнего исхода swap(): "ok" или текст сбоя. */
     @Volatile var lastWhy = ""
         private set
@@ -55,6 +62,16 @@ class RodSwap(
 
     /** Видна ли плашка «Ваша удочка сломана.» (красный круг в верхней центральной области). */
     fun brokenNow(): Boolean {
+        if (now() - lastDone < 7000) return false     // сразу после замены старая плашка ещё на экране
+        if (!redPlaque()) return false
+        for (i in 0 until 2) {                        // плашка должна держаться несколько кадров
+            nap(150)
+            if (!redPlaque()) return false
+        }
+        return true
+    }
+
+    private fun redPlaque(): Boolean {
         val img = grab.latest() ?: return false
         val W = img.width; val H = img.height
         val sc = H / 1220.0
@@ -257,6 +274,7 @@ class RodSwap(
 
     /** Полная замена. true = целая удочка надета, инвентарь закрыт. */
     fun swap(acc: BotAccessibilityService): Boolean {
+        soft = false
         val t = now()
         swaps.removeAll { t - it > 20 * 60 * 1000L }
         if (swaps.size >= 4) { lastWhy = "удочки ломаются слишком часто"; onState("удочки ломаются слишком часто"); return false }
@@ -266,13 +284,15 @@ class RodSwap(
         try {
             onState("удочка сломана")
             nap(1500)                                   // дождаться, пока плашки исчезнут
-            if (inventoryOpen()) { why = "уже открыт инвентарь"; return false }
+            if (inventoryOpen()) { why = "уже открыт инвентарь"; soft = true; swaps.remove(t); return false }
             onState("открываю инвентарь")
             tapFrac(acc, 0.957, 0.905)   // центр круга-рюкзака (красный «!» правее и выше)
-            if (!waitOpen(true, 2500)) { why = "инвентарь не открылся"; return false }
+            if (!waitOpen(true, 2500)) { why = "инвентарь не открылся"; soft = true; swaps.remove(t); return false }
             nap(500)
             val eqBefore = equippedRun()
-            if (equippedGreen()) {                      // в руках целая удочка: тревога ложная, ничего не трогаем
+            val wNow = grab.latest()?.width ?: 0
+            if (equippedGreen() || (eqBefore > 0 && eqBefore >= (0.006 * wNow).toInt())) {   // в руках рабочая удочка (полоска любого цвета): тревога ложная
+                swaps.remove(t)
                 why = "ok (тревога ложная)"
                 closeInventory(acc)
                 return true
@@ -319,6 +339,7 @@ class RodSwap(
             return true
         } finally {
             lastWhy = why
+            lastDone = now()
             FlightLog.save(acc, why, "rodswap")
         }
     }
