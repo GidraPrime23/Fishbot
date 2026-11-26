@@ -75,6 +75,10 @@ class RodSwap(
             if (!redPlaque()) return false
         }
         saveAlarm()
+        if (lastCrossWhite > 60) {                    // виден крестик рыбалки: заброс идёт, интерфейс скрыт, удочка не сломана
+            alarmInfo = ""
+            return false
+        }
         return true
     }
 
@@ -120,6 +124,7 @@ class RodSwap(
     @Volatile private var lastWin = intArrayOf(0, 0, 0, 0)
     @Volatile private var alarmInfo = ""
     private var alarmSaved = 0
+    @Volatile private var lastCrossWhite = 0   // белых пикселей в окне крестика рыбалки при последней тревоге
 
     /**
      * Тревога «удочка сломана» сработала: пишем в лог число красных отсчётов, их границы и число белых
@@ -128,6 +133,7 @@ class RodSwap(
      * Любая ошибка здесь гасится: на ловлю это влиять не должно.
      */
     private fun saveAlarm() {
+        lastCrossWhite = 0
         try {
             val img = grab.latest() ?: return
             val W = img.width; val H = img.height
@@ -141,6 +147,7 @@ class RodSwap(
                     if (((c shr 16) and 255) > 200 && ((c shr 8) and 255) > 200 && (c and 255) > 200) white++
                 }
             }
+            lastCrossWhite = white
             val win = lastWin
             alarmInfo = "alarm,red=$lastRed,thr=${"%.0f".format(lastThr)},win=${win[0]},${win[1]},${win[2]},${win[3]}," +
                 "box=$lastBox,cross_white=$white,cross_tot=$tot,frame=${W}x$H"
@@ -150,6 +157,7 @@ class RodSwap(
             if (full.size < W * H) return
             for (i in full.indices) full[i] = full[i] or (0xFF shl 24)
             val ts = System.currentTimeMillis()
+            val tag = if (white > 60) "blocked" else "real"
             val wx = win[0]; val wy = win[1]; val ww = win[2]; val wh = win[3]
             val ctx = BotAccessibilityService.instance ?: return
             Thread {
@@ -157,7 +165,7 @@ class RodSwap(
                     val bmp = Bitmap.createBitmap(full, W, H, Bitmap.Config.ARGB_8888)
                     if (ww > 0 && wh > 0 && wx + ww <= W && wy + wh <= H) {
                         val crop = Bitmap.createBitmap(bmp, wx, wy, ww, wh)
-                        savePng(ctx, crop, "fishbot_alarm_${ts}_win.png")
+                        savePng(ctx, crop, "fishbot_alarm_${ts}_${tag}_win.png")
                     }
                     val m = bmp.copy(Bitmap.Config.ARGB_8888, true)
                     val cv = Canvas(m)
@@ -168,7 +176,7 @@ class RodSwap(
                     p.color = Color.CYAN
                     cv.drawRect(cx0.toFloat(), cy0.toFloat(), (cx0 + cw).toFloat(), (cy0 + chh).toFloat(), p)
                     val small = Bitmap.createScaledBitmap(m, W / 2, H / 2, true)
-                    savePng(ctx, small, "fishbot_alarm_${ts}_full.png")
+                    savePng(ctx, small, "fishbot_alarm_${ts}_${tag}_full.png")
                 } catch (e: Throwable) { }
             }.also { it.isDaemon = true }.start()
         } catch (e: Throwable) { }
