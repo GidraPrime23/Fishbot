@@ -52,6 +52,7 @@ class FloatingService : Service() {
     private var menuBtn: View? = null
     private var menuCard: View? = null
     private var menuLp: WindowManager.LayoutParams? = null
+    private var fishOn = true
     private lateinit var tvState: TextView
     private lateinit var tvTime: TextView
     private lateinit var tvPlay: TextView
@@ -298,10 +299,14 @@ class FloatingService : Service() {
             text = "Функционал"; setTextColor(Color.WHITE); textSize = 18f; gravity = Gravity.CENTER
             setTypeface(null, android.graphics.Typeface.BOLD)
         }
-        val info = TextView(this).apply {
-            text = "Авторыбалка: галочка будет в следующем шаге"
-            setTextColor(0xFF9AA4B2.toInt()); textSize = 13f; gravity = Gravity.CENTER
-            setPadding(0, dp(10), 0, dp(6))
+        val fishRow = TextView(this).apply {
+            text = (if (fishOn) "\u2611" else "\u2610") + "  Авторыбалка"
+            setTextColor(Color.WHITE); textSize = 17f; gravity = Gravity.CENTER
+            setPadding(0, dp(14), 0, dp(8))
+            setOnClickListener {
+                setFish(!fishOn)
+                text = (if (fishOn) "\u2611" else "\u2610") + "  Авторыбалка"
+            }
         }
         val tvOff = TextView(this).apply {
             text = "\u2715 закрыть меню"; setTextColor(Color.WHITE); textSize = 15f; gravity = Gravity.CENTER
@@ -314,7 +319,7 @@ class FloatingService : Service() {
             setOnClickListener { stopSelf() }
         }
         card.addView(title)
-        card.addView(info)
+        card.addView(fishRow)
         card.addView(tvOff)
         card.addView(tvExit)
         val lp = WindowManager.LayoutParams(
@@ -327,6 +332,13 @@ class FloatingService : Service() {
             wm.addView(card, lp)
             menuCard = card
         } catch (_: Exception) {}
+    }
+
+    // галочка «Авторыбалка»: снять = сначала остановить бота, потом спрятать панель; поставить = показать панель
+    private fun setFish(on: Boolean) {
+        if (!on && loop?.active == true) pause()
+        fishOn = on
+        try { root?.visibility = if (on) View.VISIBLE else View.GONE } catch (_: Exception) {}
     }
 
     private fun closeMenu() {
