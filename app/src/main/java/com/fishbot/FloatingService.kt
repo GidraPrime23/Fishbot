@@ -49,6 +49,9 @@ class FloatingService : Service() {
 
     private var root: LinearLayout? = null
     private var calibView: View? = null
+    private var menuBtn: View? = null
+    private var menuCard: View? = null
+    private var menuLp: WindowManager.LayoutParams? = null
     private lateinit var tvState: TextView
     private lateinit var tvTime: TextView
     private lateinit var tvPlay: TextView
@@ -82,6 +85,7 @@ class FloatingService : Service() {
         running = true
         License.startHeartbeat(this) { ui.post { stopSelf() } }
         showBubble()
+        showMenuButton()
         return START_NOT_STICKY
     }
 
@@ -92,6 +96,8 @@ class FloatingService : Service() {
         panelPassThrough = null
         try { root?.let { wm.removeView(it) } } catch (_: Exception) {}
         try { calibView?.let { wm.removeView(it) } } catch (_: Exception) {}
+        try { menuBtn?.let { wm.removeView(it) } } catch (_: Exception) {}
+        try { menuCard?.let { wm.removeView(it) } } catch (_: Exception) {}
         try { grabber?.release() } catch (_: Throwable) {}
         super.onDestroy()
     }
@@ -188,6 +194,144 @@ class FloatingService : Service() {
         root = panel
         wm.addView(panel, lp)
         if (!prefs.hasButton) setState("нажмите ⌖ и коснитесь кнопки рыбалки")
+    }
+
+    // ------------------------------------------------------------------ кнопка меню (этап 1a)
+
+    private fun menuPrefs() = getSharedPreferences("fishbot_menu", Context.MODE_PRIVATE)
+
+    /** Безопасная полоса: центр кнопки x 0.62-0.78 W, y 0.03-0.10 H (там бот ничего не ищет и не нажимает). */
+    private fun placeMenuButton() {
+        val b = menuBtn ?: return
+        val lp = menuLp ?: return
+        val (w, h) = realSize()
+        val sp = menuPrefs()
+        val fx = sp.getFloat("mx", 0.70f).coerceIn(0.62f, 0.78f)
+        val fy = sp.getFloat("my", 0.07f).coerceIn(0.03f, 0.10f)
+        lp.x = (fx * w).toInt() - lp.width / 2
+        lp.y = (fy * h).toInt() - lp.height / 2
+        try { wm.updateViewLayout(b, lp) } catch (_: Exception) {}
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        placeMenuButton()
+    }
+
+    private fun showMenuButton() {
+        try {
+            val d = dp(44)
+            val btn = TextView(this).apply {
+                text = "\u2630"; setTextColor(Color.WHITE); textSize = 20f; gravity = Gravity.CENTER
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xB3383E4A.toInt()) }
+            }
+            val lp = WindowManager.LayoutParams(
+                d, d,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            ).apply { gravity = Gravity.TOP or Gravity.START }
+            menuBtn = btn
+            menuLp = lp
+            placeMenuButton()
+            btn.setOnTouchListener(object : View.OnTouchListener {
+                var sx = 0; var sy = 0; var tx = 0f; var ty = 0f; var moved = false
+                override fun onTouch(v: View, e: MotionEvent): Boolean {
+                    when (e.action) {
+                        MotionEvent.ACTION_DOWN -> { sx = lp.x; sy = lp.y; tx = e.rawX; ty = e.rawY; moved = false }
+                        MotionEvent.ACTION_MOVE -> {
+                            val dx = e.rawX - tx
+                            val dy = e.rawY - ty
+                            if (!moved && Math.abs(dx) + Math.abs(dy) > dp(8).toFloat()) moved = true
+                            if (moved) {
+                                val (cw, ch) = realSize()
+                                val cx = ((sx + dx + lp.width / 2f) / cw).coerceIn(0.62f, 0.78f)
+                                val cy = ((sy + dy + lp.height / 2f) / ch).coerceIn(0.03f, 0.10f)
+                                lp.x = (cx * cw).toInt() - lp.width / 2
+                                lp.y = (cy * ch).toInt() - lp.height / 2
+                                try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
+                            }
+                        }
+                        MotionEvent.ACTION_UP -> {
+                            if (moved) {
+                                val (cw, ch) = realSize()
+                                menuPrefs().edit()
+                                    .putFloat("mx", (lp.x + lp.width / 2f) / cw)
+                                    .putFloat("my", (lp.y + lp.height / 2f) / ch)
+                                    .apply()
+                            } else {
+                                openMenu()
+                            }
+                        }
+                    }
+                    return true
+                }
+            })
+            wm.addView(btn, lp)
+            // на время замены удочки кнопка тоже прозрачна для касаний
+            val old = panelPassThrough
+            panelPassThrough = { on ->
+                old?.invoke(on)
+                ui.post {
+                    try {
+                        val f = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        lp.flags = if (on) (lp.flags or f) else (lp.flags and f.inv())
+                        wm.updateViewLayout(btn, lp)
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun openMenu() {
+        if (menuCard != null) return
+        if (loop?.active == true) pause()
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(14), dp(18), dp(14))
+            background = GradientDrawable().apply {
+                setColor(0xF01B1F27.toInt())
+                cornerRadius = dp(14).toFloat()
+            }
+        }
+        val title = TextView(this).apply {
+            text = "Функционал"; setTextColor(Color.WHITE); textSize = 18f; gravity = Gravity.CENTER
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+        val info = TextView(this).apply {
+            text = "Авторыбалка: галочка будет в следующем шаге"
+            setTextColor(0xFF9AA4B2.toInt()); textSize = 13f; gravity = Gravity.CENTER
+            setPadding(0, dp(10), 0, dp(6))
+        }
+        val tvOff = TextView(this).apply {
+            text = "\u2715 закрыть меню"; setTextColor(Color.WHITE); textSize = 15f; gravity = Gravity.CENTER
+            setPadding(0, dp(12), 0, dp(6))
+            setOnClickListener { closeMenu() }
+        }
+        val tvExit = TextView(this).apply {
+            text = "выход из приложения"; setTextColor(0xFF9AA4B2.toInt()); textSize = 12f; gravity = Gravity.CENTER
+            setPadding(0, dp(10), 0, 0)
+            setOnClickListener { stopSelf() }
+        }
+        card.addView(title)
+        card.addView(info)
+        card.addView(tvOff)
+        card.addView(tvExit)
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP or Gravity.END; x = dp(16); y = dp(70) }
+        try {
+            wm.addView(card, lp)
+            menuCard = card
+        } catch (_: Exception) {}
+    }
+
+    private fun closeMenu() {
+        try { menuCard?.let { wm.removeView(it) } } catch (_: Exception) {}
+        menuCard = null
     }
 
     private fun setState(s: String) { tvState.text = s }
