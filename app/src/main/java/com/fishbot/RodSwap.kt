@@ -1,7 +1,13 @@
 package com.fishbot
 
+import android.content.ContentValues
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.media.Image
 import android.os.SystemClock
+import android.provider.MediaStore
 
 /**
  * Автозамена сломанной удочки.
@@ -68,6 +74,7 @@ class RodSwap(
             nap(150)
             if (!redPlaque()) return false
         }
+        saveAlarm()
         return true
     }
 
@@ -82,14 +89,98 @@ class RodSwap(
         if (cw <= 0) return false
         val ch = px.size / cw
         var n = 0
+        var bx0 = Int.MAX_VALUE; var bx1 = -1; var by0 = Int.MAX_VALUE; var by1 = -1
         var y = 0
         while (y < ch) {
             var x = 0
             val base = y * cw
-            while (x < cw) { if (isRed(px[base + x])) n++; x += 2 }
+            while (x < cw) {
+                if (isRed(px[base + x])) {
+                    n++
+                    if (x < bx0) bx0 = x
+                    if (x > bx1) bx1 = x
+                    if (y < by0) by0 = y
+                    if (y > by1) by1 = y
+                }
+                x += 2
+            }
             y += 2
         }
-        return n >= 90 * sc * sc
+        lastRed = n; lastThr = 90 * sc * sc
+        lastBox = if (n > 0) "$bx0-$bx1:$by0-$by1" else "-"
+        lastWin = intArrayOf(x0, y0, cw, ch)
+        return n >= lastThr
+    }
+
+    // ------------------------------------------------------- диагностика тревоги
+
+    @Volatile private var lastRed = 0
+    @Volatile private var lastThr = 0.0
+    @Volatile private var lastBox = "-"
+    @Volatile private var lastWin = intArrayOf(0, 0, 0, 0)
+    @Volatile private var alarmInfo = ""
+    private var alarmSaved = 0
+
+    /**
+     * Тревога «удочка сломана» сработала: пишем в лог число красных отсчётов, их границы и число белых
+     * пикселей в окне крестика рыбалки (вверху справа; пока ТОЛЬКО измеряем, на решение не влияет),
+     * и сохраняем в «Загрузки» кадр (fishbot_alarm_<время>_full.png) и вырез окна (…_win.png).
+     * Любая ошибка здесь гасится: на ловлю это влиять не должно.
+     */
+    private fun saveAlarm() {
+        try {
+            val img = grab.latest() ?: return
+            val W = img.width; val H = img.height
+            val cx0 = (0.940 * W).toInt(); val cy0 = (0.040 * H).toInt()
+            val cw = (0.046 * W).toInt(); val chh = (0.090 * H).toInt()
+            var white = 0; var tot = 0
+            val cp = grab.region(img, cx0, cy0, cw, chh)
+            if (cp.size >= cw * chh) {
+                for (c in cp) {
+                    tot++
+                    if (((c shr 16) and 255) > 200 && ((c shr 8) and 255) > 200 && (c and 255) > 200) white++
+                }
+            }
+            val win = lastWin
+            alarmInfo = "alarm,red=$lastRed,thr=${"%.0f".format(lastThr)},win=${win[0]},${win[1]},${win[2]},${win[3]}," +
+                "box=$lastBox,cross_white=$white,cross_tot=$tot,frame=${W}x$H"
+            if (alarmSaved >= 8) return
+            alarmSaved++
+            val full = grab.region(img, 0, 0, W, H)
+            if (full.size < W * H) return
+            for (i in full.indices) full[i] = full[i] or (0xFF shl 24)
+            val ts = System.currentTimeMillis()
+            val wx = win[0]; val wy = win[1]; val ww = win[2]; val wh = win[3]
+            val ctx = BotAccessibilityService.instance ?: return
+            Thread {
+                try {
+                    val bmp = Bitmap.createBitmap(full, W, H, Bitmap.Config.ARGB_8888)
+                    if (ww > 0 && wh > 0 && wx + ww <= W && wy + wh <= H) {
+                        val crop = Bitmap.createBitmap(bmp, wx, wy, ww, wh)
+                        savePng(ctx, crop, "fishbot_alarm_${ts}_win.png")
+                    }
+                    val m = bmp.copy(Bitmap.Config.ARGB_8888, true)
+                    val cv = Canvas(m)
+                    val p = Paint()
+                    p.style = Paint.Style.STROKE; p.strokeWidth = 4f
+                    p.color = Color.YELLOW
+                    cv.drawRect(wx.toFloat(), wy.toFloat(), (wx + ww).toFloat(), (wy + wh).toFloat(), p)
+                    p.color = Color.CYAN
+                    cv.drawRect(cx0.toFloat(), cy0.toFloat(), (cx0 + cw).toFloat(), (cy0 + chh).toFloat(), p)
+                    val small = Bitmap.createScaledBitmap(m, W / 2, H / 2, true)
+                    savePng(ctx, small, "fishbot_alarm_${ts}_full.png")
+                } catch (e: Throwable) { }
+            }.also { it.isDaemon = true }.start()
+        } catch (e: Throwable) { }
+    }
+
+    private fun savePng(ctx: android.content.Context, bmp: Bitmap, name: String) {
+        val cv = ContentValues()
+        cv.put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+        cv.put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+        cv.put(MediaStore.MediaColumns.RELATIVE_PATH, "Download")
+        val uri = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: return
+        ctx.contentResolver.openOutputStream(uri)?.use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     /** Открыто ли окно инвентаря: большая тёмная область по центру. */
@@ -280,6 +371,7 @@ class RodSwap(
         if (swaps.size >= 4) { lastWhy = "удочки ломаются слишком часто"; onState("удочки ломаются слишком часто"); return false }
         swaps.add(t)
         FlightLog.start("ROD")
+        if (alarmInfo.isNotEmpty()) { log(alarmInfo); alarmInfo = "" }
         var why = "fail"
         try {
             FloatingService.panelPassThrough?.invoke(true)
