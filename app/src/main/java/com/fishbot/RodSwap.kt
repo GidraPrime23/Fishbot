@@ -123,20 +123,25 @@ class RodSwap(
      * «Ваша удочка сломана» на экране И крестика рыбалки нет. При настоящей мини-игре крестик виден.
      */
     fun brokenQuick(): Boolean {
-        if (now() - lastDone < 7000) return false
-        if (!redPlaque()) return false
-        return crossWhiteNow() <= 60
+        return try {
+            if (now() - lastDone < 7000) false
+            else if (!redPlaque()) false
+            else crossWhiteNow() <= 60
+        } catch (e: Throwable) { false }   // кадр закрыт другим потоком и т.п.: считаем «не сломана»
     }
 
     /** Подтверждение после нескольких brokenQuick подряд: пишет диагностику (строка alarm, картинки). */
     fun confirmAlarm(): Boolean {
-        saveAlarm()
-        if (lastCrossWhite > 60) { alarmInfo = ""; return false }
-        return true
+        return try {
+            saveAlarm()
+            if (lastCrossWhite > 60) { alarmInfo = ""; false } else true
+        } catch (e: Throwable) { false }
     }
 
     /** Белых пикселей в окне крестика рыбалки сейчас (нет кадра: 999, то есть «крестик есть», тревоги не будет). */
-    private fun crossWhiteNow(): Int {
+    private fun crossWhiteNow(): Int = try { crossWhiteRaw() } catch (e: Throwable) { 999 }
+
+    private fun crossWhiteRaw(): Int {
         val img = grab.latest() ?: return 999
         val W = img.width; val H = img.height
         val cx0 = (0.940 * W).toInt(); val cy0 = (0.040 * H).toInt()
