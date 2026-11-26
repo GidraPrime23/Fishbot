@@ -156,7 +156,11 @@ class BotLoop(
             }
 
             if (bar && active) {
-                play(W, sc, bx, by, ctl)
+                if (play(W, sc, bx, by, ctl)) {           // удочка сломалась во время мини-игры
+                    if (rod.swap(acc)) { softFails = 0; misses = 0; continue }
+                    if (rod.soft && ++softFails < 3) { continue }
+                    fail("Удочку не удалось одеть: ${rod.lastWhy}"); return
+                }
                 onCatch()
                 onState("пауза после улова")
                 nap(2500)
@@ -166,9 +170,9 @@ class BotLoop(
 
     // ------------------------------------------------------------ мини-игра
 
-    private fun play(W: Int, sc: Double, bx: Int, by: Int, ctl: Pilot) {
-        val acc = BotAccessibilityService.instance ?: return
-        val z0 = zoneAbs ?: return
+    private fun play(W: Int, sc: Double, bx: Int, by: Int, ctl: Pilot): Boolean {
+        val acc = BotAccessibilityService.instance ?: return false
+        val z0 = zoneAbs ?: return false
         onState("мини-игра")
         val zw = z0[1] - z0[0] + 1
         val sx0 = maxOf(0, z0[0] - zw)
@@ -187,6 +191,9 @@ class BotLoop(
         val tStart = now()
         var prevT = tStart
         var endWhy = "stopped"
+        var rodBroken = false
+        var qHits = 0
+        var lastQ = 0L
         try {
             while (active) {
                 val img = grab.poll()
@@ -196,6 +203,15 @@ class BotLoop(
                     continue
                 }
                 val tg = now()
+                if (tg - lastQ >= 300) {
+                    lastQ = tg
+                    if (rod.brokenQuick()) {
+                        if (++qHits >= 3) {
+                            if (rod.confirmAlarm()) { rodBroken = true; endWhy = "rod_broken"; break }
+                            qHits = 0
+                        }
+                    } else qHits = 0
+                }
         val h = img.height
                 val px = grab.region(img, sx0, 0, sw, h)
                 val t = now()
@@ -231,5 +247,6 @@ class BotLoop(
             acc.setHold(false, bx.toFloat(), by.toFloat())
             FlightLog.save(acc, endWhy, "cast=${HoldPilot.casts},W=$W,sc=$sc,bx=$bx,by=$by,zw=$zw,sw=$sw")
         }
+        return rodBroken
     }
 }

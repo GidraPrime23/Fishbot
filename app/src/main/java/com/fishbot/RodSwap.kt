@@ -116,6 +116,40 @@ class RodSwap(
         return n >= lastThr
     }
 
+    // ------------------------------------------------- проверка во время мини-игры
+
+    /**
+     * Быстрая проверка внутри мини-игры (без пауз и без сохранения картинок): красная плашка
+     * «Ваша удочка сломана» на экране И крестика рыбалки нет. При настоящей мини-игре крестик виден.
+     */
+    fun brokenQuick(): Boolean {
+        if (now() - lastDone < 7000) return false
+        if (!redPlaque()) return false
+        return crossWhiteNow() <= 60
+    }
+
+    /** Подтверждение после нескольких brokenQuick подряд: пишет диагностику (строка alarm, картинки). */
+    fun confirmAlarm(): Boolean {
+        saveAlarm()
+        if (lastCrossWhite > 60) { alarmInfo = ""; return false }
+        return true
+    }
+
+    /** Белых пикселей в окне крестика рыбалки сейчас (нет кадра: 999, то есть «крестик есть», тревоги не будет). */
+    private fun crossWhiteNow(): Int {
+        val img = grab.latest() ?: return 999
+        val W = img.width; val H = img.height
+        val cx0 = (0.940 * W).toInt(); val cy0 = (0.040 * H).toInt()
+        val cw = (0.046 * W).toInt(); val chh = (0.090 * H).toInt()
+        val cp = grab.region(img, cx0, cy0, cw, chh)
+        if (cp.size < cw * chh) return 999
+        var white = 0
+        for (c in cp) {
+            if (((c shr 16) and 255) > 200 && ((c shr 8) and 255) > 200 && (c and 255) > 200) white++
+        }
+        return white
+    }
+
     // ------------------------------------------------------- диагностика тревоги
 
     @Volatile private var lastRed = 0
