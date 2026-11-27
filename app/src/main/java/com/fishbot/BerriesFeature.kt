@@ -64,7 +64,7 @@ object BerriesFeature : Feature {
         active = true
         acc.joyReset()
         acc.joyLog = { s -> log("    " + s) }
-        log("START v2 model=" + Build.MODEL + " sdk=" + Build.VERSION.SDK_INT + " screen=" + w + "x" + h +
+        log("START v3 model=" + Build.MODEL + " sdk=" + Build.VERSION.SDK_INT + " screen=" + w + "x" + h +
             " anchor=" + ax.toInt() + "," + ay.toInt() + " r=" + (JOY_R * h).toInt() + " travel=" + travel.toInt() +
             " move_ms=" + MOVE_MS + " pause_ms=" + PAUSE_MS)
         host.toast("Тест джойстика через 6 с: закройте меню. Запомните X/Y сейчас. Будет 2 части")
@@ -78,8 +78,8 @@ object BerriesFeature : Feature {
         val dys = floatArrayOf(-1f, 1f, 0f, 0f)
         val partMs = 4 * (MOVE_MS + PAUSE_MS) + PART_GAP_MS
         for (part in 0 until 2) {
-            val swipe = part == 1
-            val mode = if (swipe) "swipe" else "hold"
+            val jmode = part + 1
+            val mode = if (part == 0) "A_jitter" else "B_chain"
             val base = START_DELAY_MS + part * partMs
             for (i in 0 until 4) {
                 val t = base + i * (MOVE_MS + PAUSE_MS)
@@ -90,7 +90,7 @@ object BerriesFeature : Feature {
                     log("PART" + (part + 1) + " " + mode + " MOVE " + names[i] + " anchor=" + ax.toInt() + "," + ay.toInt() +
                         " to=" + ex.toInt() + "," + ey.toInt())
                     host.marker(ax.toInt(), ay.toInt(), Color.CYAN)
-                    acc.joyMove(ax, ay, ex, ey, swipe, MOVE_MS + 500L)
+                    acc.joyMove(ax, ay, ex, ey, jmode, MOVE_MS + 500L)
                 }
                 later(t + MOVE_MS) {
                     log("PART" + (part + 1) + " RELEASE " + names[i] + " " + acc.joyStats())

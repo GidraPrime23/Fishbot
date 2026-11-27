@@ -124,20 +124,27 @@ class BotAccessibilityService : AccessibilityService() {
         }
     }
 
-    // ---------------------------------------------------------------- джойстик (ягоды, этап 3), версия p64
-    // Каждый штрих самозавершающийся (willContinue = false): после него палец гарантированно отпущен,
-    // залипнуть нечему. Пока joyWant и не наступил дедлайн, штрихи подаются подряд.
-    // swipe = false: палец касается сразу в точке цели (ex, ey) и держится;
-    // swipe = true: касание в якоре (ax, ay) и сдвиг к цели в пределах штриха.
+    // ---------------------------------------------------------------- джойстик (ягоды, этап 3), версия p65
+    // Джойстик в игре плавающий: центр основания там, где палец коснулся. Поэтому касание ВСЕГДА в якоре (ax, ay),
+    // а отклонение создаётся сдвигом пальца к цели.
+    // mode 1 (A): самозавершающиеся штрихи: быстрый заход к цели, потом дрожь +-JOY_JIT px у цели (палец держит отклонение).
+    // mode 2 (B): цепочка: короткий первый штрих (willContinue = true), продолжения ненулевой длины, закрывающий штрих в конце.
+    private val JOY_FIRST_MS = 80L
+    private val JOY_JIT = 2f
+    private val JOY_JIT_N = 80
     private var joyInFlight = false
     private var joyWant = false
-    private var joySwipe = false
+    private var joyMode = 1
     private var joyAx = 0f
     private var joyAy = 0f
     private var joyEx = 0f
     private var joyEy = 0f
+    private var joyCurX = 0f
+    private var joyCurY = 0f
     private var joyUntil = 0L
     private var joyCancelRun = 0
+    private var joyOpen = false
+    private var joyStroke: StrokeDescription? = null
     @Volatile private var joySent = 0
     @Volatile private var joyDone = 0
     @Volatile private var joyCancelled = 0
@@ -152,60 +159,55 @@ class BotAccessibilityService : AccessibilityService() {
 
     fun joyStats(): String = "sent=$joySent done=$joyDone cancelled=$joyCancelled rejected=$joyRejected"
 
-    fun joyReset() { joySent = 0; joyDone = 0; joyCancelled = 0; joyRejected = 0; joyCancelRun = 0 }
+    fun joyReset() {
+        joySent = 0; joyDone = 0; joyCancelled = 0; joyRejected = 0; joyCancelRun = 0
+        joyOpen = false; joyStroke = null
+    }
 
-    /** Держать джойстик в сторону (ex, ey) не дольше maxHoldMs (дедлайн страхует от залипания). Повторный вызов меняет цель. */
-    fun joyMove(ax: Float, ay: Float, ex: Float, ey: Float, swipe: Boolean, maxHoldMs: Long) {
+    /** Держать джойстик в сторону (ex, ey) не дольше maxHoldMs. mode: 1 = A (дрожь у цели), 2 = B (цепочка). Повторный вызов меняет цель. */
+    fun joyMove(ax: Float, ay: Float, ex: Float, ey: Float, mode: Int, maxHoldMs: Long) {
         main.post {
             joyAx = ax; joyAy = ay; joyEx = ex; joyEy = ey
-            joySwipe = swipe
+            joyMode = mode
             joyUntil = android.os.SystemClock.elapsedRealtime() + maxHoldMs
             joyWant = true
             joyCancelRun = 0
-            jlog("move swipe=$swipe to=${ex.toInt()},${ey.toInt()} hold_ms=$maxHoldMs")
+            jlog("move mode=$mode to=${ex.toInt()},${ey.toInt()} hold_ms=$maxHoldMs")
             try { joyPump() } catch (e: Throwable) { joyInFlight = false; jlog("pump error " + e) }
         }
     }
 
-    /** Отпустить: новых штрихов не будет, идущий штрих закончится сам (до JOY_SEG_MS). Безопасно вызывать повторно. */
+    /** Отпустить: новых штрихов не будет; открытая цепочка (режим B) закроется коротким штрихом. Безопасно вызывать повторно. */
     fun joyRelease() {
         main.post {
             if (joyWant) jlog("release")
             joyWant = false
+            try { joyPump() } catch (e: Throwable) { joyInFlight = false; jlog("pump error " + e) }
         }
     }
 
-    private fun joyPump() {
-        if (joyInFlight || !joyWant) return
-        val left = joyUntil - android.os.SystemClock.elapsedRealtime()
-        if (left <= 0L) {
-            joyWant = false
-            jlog("deadline")
-            return
-        }
-        val dur = Math.max(40L, Math.min(JOY_SEG_MS, left))
-        val sx = if (joySwipe) joyAx else joyEx
-        val sy = if (joySwipe) joyAy else joyEy
-        val ex = joyEx
-        val ey = joyEy
-        val p = Path()
-        p.moveTo(sx, sy)
-        if (Math.abs(ex - sx) > 1f || Math.abs(ey - sy) > 1f) p.lineTo(ex, ey)
-        val n = ++joySent
+    private fun joyDispatch(st: StrokeDescription, n: Int, willCont: Boolean, endX: Float, endY: Float, what: String) {
         joyInFlight = true
         val ok = dispatchGesture(
-            GestureDescription.Builder().addStroke(StrokeDescription(p, 0, dur, false)).build(),
+            GestureDescription.Builder().addStroke(st).build(),
             object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
                     joyInFlight = false
                     joyDone++
                     joyCancelRun = 0
+                    if (willCont) {
+                        joyStroke = st; joyOpen = true; joyCurX = endX; joyCurY = endY
+                    } else {
+                        joyStroke = null; joyOpen = false
+                    }
                     jlog("g$n completed")
                     joyPump()
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
                     joyInFlight = false
+                    joyStroke = null
+                    joyOpen = false
                     joyCancelled++
                     joyCancelRun++
                     jlog("g$n cancelled run=$joyCancelRun")
@@ -223,11 +225,77 @@ class BotAccessibilityService : AccessibilityService() {
         )
         if (!ok) {
             joyInFlight = false
+            joyStroke = null
+            joyOpen = false
             joyRejected++
             joyWant = false
             jlog("g$n rejected by dispatchGesture")
             return
         }
-        jlog("g$n sent from=${sx.toInt()},${sy.toInt()} to=${ex.toInt()},${ey.toInt()} dur=$dur")
+        jlog("g$n sent $what")
+    }
+
+    private fun joyEnd(prev: StrokeDescription) {
+        val n = ++joySent
+        try {
+            val p = Path()
+            p.moveTo(joyCurX, joyCurY)
+            p.lineTo(joyCurX + 1f, joyCurY)
+            joyDispatch(prev.continueStroke(p, 0L, 20L, false), n, false, joyCurX + 1f, joyCurY, "END-of-chain dur=20")
+        } catch (e: Throwable) {
+            joyInFlight = false
+            joyStroke = null
+            joyOpen = false
+            jlog("end error " + e)
+        }
+    }
+
+    private fun joyPump() {
+        if (joyInFlight) return
+        val left = joyUntil - android.os.SystemClock.elapsedRealtime()
+        if (joyWant && left <= 0L) {
+            joyWant = false
+            jlog("deadline")
+        }
+        if (!joyWant) {
+            val open = joyStroke
+            if (joyOpen && open != null) joyEnd(open)
+            return
+        }
+        val dur = Math.max(40L, Math.min(JOY_SEG_MS, left))
+        val n = ++joySent
+        try {
+            if (joyMode == 2) {
+                val st0 = joyStroke
+                val cont = joyOpen && st0 != null
+                val sx = if (cont) joyCurX else joyAx
+                val sy = if (cont) joyCurY else joyAy
+                val far = Math.abs(sx - joyEx) > 0.5f || Math.abs(sy - joyEy) > 0.5f
+                val tx = if (far) joyEx else joyEx + 1f
+                val ty = if (far) joyEy else joyEy + 1f
+                val segMs = if (cont) dur else Math.min(dur, JOY_FIRST_MS)
+                val willCont = left > segMs
+                val p = Path()
+                p.moveTo(sx, sy)
+                p.lineTo(tx, ty)
+                val st = if (st0 != null && cont) st0.continueStroke(p, 0L, segMs, willCont) else StrokeDescription(p, 0L, segMs, willCont)
+                joyDispatch(st, n, willCont, tx, ty, "B cont=$cont from=${sx.toInt()},${sy.toInt()} to=${tx.toInt()},${ty.toInt()} dur=$segMs willContinue=$willCont")
+            } else {
+                val p = Path()
+                p.moveTo(joyAx, joyAy)
+                p.lineTo(joyEx, joyEy)
+                for (k in 0 until JOY_JIT_N) {
+                    val s = if (k % 2 == 0) JOY_JIT else -JOY_JIT
+                    p.lineTo(joyEx + s, joyEy + s)
+                }
+                joyDispatch(StrokeDescription(p, 0L, dur, false), n, false, joyEx, joyEy, "A from=${joyAx.toInt()},${joyAy.toInt()} to=${joyEx.toInt()},${joyEy.toInt()} dur=$dur jitter=$JOY_JIT_N")
+            }
+        } catch (e: Throwable) {
+            joyInFlight = false
+            joyStroke = null
+            joyOpen = false
+            joyWant = false
+            jlog("pump error " + e)
+        }
     }
 }
