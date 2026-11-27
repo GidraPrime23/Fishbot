@@ -52,7 +52,6 @@ class FloatingService : Service() {
     private var menuBtn: View? = null
     private var menuCard: View? = null
     private var menuLp: WindowManager.LayoutParams? = null
-    private var fishOn = true
     private lateinit var tvState: TextView
     private lateinit var tvTime: TextView
     private lateinit var tvPlay: TextView
@@ -87,10 +86,7 @@ class FloatingService : Service() {
         License.startHeartbeat(this) { ui.post { stopSelf() } }
         showBubble()
         showMenuButton()
-        if (!menuPrefs().getBoolean("fishOn", true)) {
-            fishOn = false
-            try { root?.visibility = View.GONE } catch (_: Exception) {}
-        }
+        for (f in ALL_FEATURES) { if (!isFeatureOn(f)) f.onDisable(featureHost) }
         return START_NOT_STICKY
     }
 
@@ -310,15 +306,6 @@ class FloatingService : Service() {
             text = "Функционал"; setTextColor(Color.WHITE); textSize = 18f; gravity = Gravity.CENTER
             setTypeface(null, android.graphics.Typeface.BOLD)
         }
-        val fishRow = TextView(this).apply {
-            text = (if (fishOn) "\u2611" else "\u2610") + "  Авторыбалка"
-            setTextColor(Color.WHITE); textSize = 17f; gravity = Gravity.CENTER
-            setPadding(0, dp(14), 0, dp(8))
-            setOnClickListener {
-                setFish(!fishOn)
-                text = (if (fishOn) "\u2611" else "\u2610") + "  Авторыбалка"
-            }
-        }
         val tvOff = TextView(this).apply {
             text = "\u2715 закрыть меню"; setTextColor(Color.WHITE); textSize = 15f; gravity = Gravity.CENTER
             setPadding(0, dp(12), 0, dp(6))
@@ -330,7 +317,17 @@ class FloatingService : Service() {
             setOnClickListener { stopSelf() }
         }
         card.addView(title)
-        card.addView(fishRow)
+        for (f in ALL_FEATURES) {
+            card.addView(TextView(this).apply {
+                text = featureRowText(f)
+                setTextColor(Color.WHITE); textSize = 17f; gravity = Gravity.CENTER
+                setPadding(0, dp(14), 0, dp(8))
+                setOnClickListener {
+                    setFeature(f, !isFeatureOn(f))
+                    text = featureRowText(f)
+                }
+            })
+        }
         card.addView(tvOff)
         card.addView(tvExit)
         val lp = WindowManager.LayoutParams(
@@ -345,12 +342,26 @@ class FloatingService : Service() {
         } catch (_: Exception) {}
     }
 
-    // галочка «Авторыбалка»: снять = сначала остановить бота, потом спрятать панель; поставить = показать панель
-    private fun setFish(on: Boolean) {
-        if (!on && loop?.active == true) pause()
-        fishOn = on
-        try { menuPrefs().edit().putBoolean("fishOn", on).apply() } catch (_: Exception) {}
-        try { root?.visibility = if (on) View.VISIBLE else View.GONE } catch (_: Exception) {}
+    // ---- реестр функций (этап 2a). Ключ сохранения у рыбалки прежний "fishOn", чтобы галочка не сбросилась.
+    private fun featureKey(f: Feature) = if (f.id == "fish") "fishOn" else "feat_" + f.id
+
+    private fun isFeatureOn(f: Feature): Boolean =
+        try { menuPrefs().getBoolean(featureKey(f), f.defaultOn) } catch (_: Exception) { f.defaultOn }
+
+    private fun featureRowText(f: Feature) = (if (isFeatureOn(f)) "\u2611" else "\u2610") + "  " + f.title
+
+    // снять галочку = сначала остановить работу, потом спрятать панель; поставить = показать панель
+    private fun setFeature(f: Feature, on: Boolean) {
+        if (on) f.onEnable(featureHost) else f.onDisable(featureHost)
+        try { menuPrefs().edit().putBoolean(featureKey(f), on).apply() } catch (_: Exception) {}
+    }
+
+    private val featureHost = object : FeatureHost {
+        override fun setPanelVisible(visible: Boolean) {
+            try { root?.visibility = if (visible) View.VISIBLE else View.GONE } catch (_: Exception) {}
+        }
+        override fun stopWork() { if (loop?.active == true) pause() }
+        override fun isWorking(): Boolean = loop?.active == true
     }
 
     private fun closeMenu() {
