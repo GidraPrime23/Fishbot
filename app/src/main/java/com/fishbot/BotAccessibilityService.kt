@@ -19,7 +19,7 @@ class BotAccessibilityService : AccessibilityService() {
         @Volatile
         var instance: BotAccessibilityService? = null
         private const val SEG_MS = 50L
-        private const val JOY_SEG_MS = 250L
+        private const val JOY_SEG_MS = 150L
         private const val JOY_CANCEL_MAX = 5
     }
 

@@ -64,45 +64,47 @@ object BerriesFeature : Feature {
         active = true
         acc.joyReset()
         acc.joyLog = { s -> log("    " + s) }
-        log("START v3 model=" + Build.MODEL + " sdk=" + Build.VERSION.SDK_INT + " screen=" + w + "x" + h +
+        log("START v4 model=" + Build.MODEL + " sdk=" + Build.VERSION.SDK_INT + " screen=" + w + "x" + h +
             " anchor=" + ax.toInt() + "," + ay.toInt() + " r=" + (JOY_R * h).toInt() + " travel=" + travel.toInt() +
             " move_ms=" + MOVE_MS + " pause_ms=" + PAUSE_MS)
-        host.toast("Тест джойстика через 6 с: закройте меню. Запомните X/Y сейчас. Будет 2 части")
+        host.toast("Тест джойстика через 6 с: закройте меню. Запомните X/Y сейчас. Будет 4 хода, X/Y после каждого")
 
         fun later(ms: Long, block: () -> Unit) {
             ui.postDelayed({ if (runId == myRun && active) block() }, ms)
         }
 
-        val names = arrayOf("up", "down", "right", "left")
-        val dxs = floatArrayOf(0f, 0f, 1f, -1f)
-        val dys = floatArrayOf(-1f, 1f, 0f, 0f)
-        val partMs = 4 * (MOVE_MS + PAUSE_MS) + PART_GAP_MS
-        for (part in 0 until 2) {
-            val jmode = part + 1
-            val mode = if (part == 0) "A_jitter" else "B_chain"
-            val base = START_DELAY_MS + part * partMs
-            for (i in 0 until 4) {
-                val t = base + i * (MOVE_MS + PAUSE_MS)
-                later(t) {
-                    if (part == 0 && i == 0) FloatingService.panelPassThrough?.invoke(true)
-                    val ex = ax + dxs[i] * travel
-                    val ey = ay + dys[i] * travel
-                    log("PART" + (part + 1) + " " + mode + " MOVE " + names[i] + " anchor=" + ax.toInt() + "," + ay.toInt() +
-                        " to=" + ex.toInt() + "," + ey.toInt())
-                    host.marker(ax.toInt(), ay.toInt(), Color.CYAN)
-                    acc.joyMove(ax, ay, ex, ey, jmode, MOVE_MS + 500L)
-                }
-                later(t + MOVE_MS) {
-                    log("PART" + (part + 1) + " RELEASE " + names[i] + " " + acc.joyStats())
-                    acc.joyRelease()
-                }
+        // Калибровка: 4 одиночных хода режима B (цепочка), после каждого пауза 6 с, чтобы записать X/Y.
+        val names = arrayOf("right", "right", "up", "down")
+        val ruNames = arrayOf("вправо", "вправо", "вверх", "вниз")
+        val dxs = floatArrayOf(1f, 1f, 0f, 0f)
+        val dys = floatArrayOf(0f, 0f, -1f, 1f)
+        val durs = longArrayOf(1500L, 3000L, 1500L, 3000L)
+        val gap = 6000L
+        var t = START_DELAY_MS
+        for (i in 0 until 4) {
+            val idx = i
+            val tStart = t
+            val dur = durs[idx]
+            later(tStart) {
+                if (idx == 0) FloatingService.panelPassThrough?.invoke(true)
+                val ex = ax + dxs[idx] * travel
+                val ey = ay + dys[idx] * travel
+                log("MOVE" + (idx + 1) + " B_chain " + names[idx] + " dur_ms=" + dur + " anchor=" + ax.toInt() + "," + ay.toInt() +
+                    " to=" + ex.toInt() + "," + ey.toInt())
+                host.marker(ax.toInt(), ay.toInt(), Color.CYAN)
+                acc.joyMove(ax, ay, ex, ey, 2, dur + 500L)
             }
-            later(base + 4 * (MOVE_MS + PAUSE_MS)) {
-                log("PART" + (part + 1) + " END " + acc.joyStats())
-                if (part == 0) host.toast("Часть 1 закончена. Запомните X/Y, часть 2 через 6 с")
+            later(tStart + dur) {
+                log("RELEASE" + (idx + 1) + " " + acc.joyStats())
+                acc.joyRelease()
             }
+            later(tStart + dur + 500L) {
+                log("MOVE" + (idx + 1) + " END " + acc.joyStats())
+                if (idx < 3) host.toast("Ход " + (idx + 1) + " из 4 закончен (" + ruNames[idx] + ", " + (dur / 1000.0) + " с). Запомните X/Y, следующий через 6 с")
+            }
+            t = tStart + dur + 500L + gap
         }
-        later(START_DELAY_MS + partMs + 4 * (MOVE_MS + PAUSE_MS)) { finish(host, "done") }
+        later(t - gap + 100L) { finish(host, "done") }
     }
 
     override fun onDisable(host: FeatureHost) {
