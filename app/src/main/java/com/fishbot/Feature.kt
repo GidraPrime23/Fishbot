@@ -12,6 +12,8 @@ interface FeatureHost {
     fun screenSize(): Pair<Int, Int>
     fun toast(msg: String)
     fun marker(x: Int, y: Int, color: Int)
+    /** Один кадр экрана целиком (пиксели ARGB) или null, если кадра нет. Вызывать НЕ из главного потока. */
+    fun grabFrame(): ScanFrame?
 }
 
 /**
@@ -38,4 +40,7 @@ object FishFeature : Feature {
     override fun onDisable(host: FeatureHost) { host.stopWork(); host.setPanelVisible(false) }
 }
 
-val ALL_FEATURES: List<Feature> = listOf(FishFeature, BerriesFeature)
+/** Кадр экрана для функций: ширина, высота, пиксели ARGB (w*h штук). */
+class ScanFrame(val w: Int, val h: Int, val px: IntArray)
+
+val ALL_FEATURES: List<Feature> = listOf(FishFeature, BerriesFeature, BerryScanFeature)

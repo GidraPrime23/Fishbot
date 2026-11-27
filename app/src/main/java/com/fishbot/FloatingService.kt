@@ -362,6 +362,16 @@ class FloatingService : Service() {
         }
         override fun stopWork() { if (loop?.active == true) pause() }
         override fun isWorking(): Boolean = loop?.active == true
+        override fun grabFrame(): ScanFrame? {
+            return try {
+                val g = grabber ?: return null
+                val img = g.poll() ?: g.latest() ?: return null
+                val w = img.width
+                val h = img.height
+                val px = g.region(img, 0, 0, w, h)
+                if (px.size < w * h) null else ScanFrame(w, h, px)
+            } catch (_: Throwable) { null }
+        }
         override fun appContext(): Context = applicationContext
         override fun screenSize(): Pair<Int, Int> = realSize()
         override fun toast(msg: String) {
