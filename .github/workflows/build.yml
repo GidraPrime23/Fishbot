@@ -14,7 +14,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
+      - name: Restore signing key
+        env:
+          KS_B64: ${{ secrets.FB_KS_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/fb.p12"
+            echo "FB_KS_PATH=$RUNNER_TEMP/fb.p12" >> "$GITHUB_ENV"
+          fi
       - run: gradle assembleDebug --no-daemon
+        env:
+          FB_KS_PASS: ${{ secrets.FB_KS_PASS }}
       - uses: actions/upload-artifact@v4
         with:
           name: FishBot-apk

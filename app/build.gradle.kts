@@ -11,7 +11,7 @@ android {
         applicationId = "com.fishbot"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toIntOrNull() ?: 1
         versionName = "1.0"
     }
     compileOptions {
@@ -20,11 +20,25 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
+    signingConfigs {
+        create("fb") {
+            val ksPath = System.getenv("FB_KS_PATH")
+            if (ksPath != null) {
+                storeFile = file(ksPath)
+                storeType = "pkcs12"
+                storePassword = System.getenv("FB_KS_PASS")
+                keyAlias = "fishbot"
+                keyPassword = System.getenv("FB_KS_PASS")
+            }
+        }
+    }
+
     buildTypes {
         debug {
         isDebuggable = false
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = if (System.getenv("FB_KS_PATH") != null) signingConfigs.getByName("fb") else signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
