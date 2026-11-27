@@ -196,7 +196,7 @@ class BotLoop(
         var lastQ = 0L
         try {
             while (active) {
-                val img = grab.poll()
+                var img = grab.poll()
                 if (img == null) {
                     Thread.sleep(3)
                     if (now() - lastOk > 800) { endWhy = "no_frames"; break }
@@ -211,6 +211,8 @@ class BotLoop(
                             qHits = 0
                         }
                     } else qHits = 0
+                    // brokenQuick() мог взять новый кадр через latest() и закрыть прежний: берём актуальный
+                    img = grab.latest() ?: continue
                 }
         val h = img.height
                 val px = grab.region(img, sx0, 0, sw, h)
