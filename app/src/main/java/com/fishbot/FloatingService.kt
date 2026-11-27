@@ -362,6 +362,14 @@ class FloatingService : Service() {
         }
         override fun stopWork() { if (loop?.active == true) pause() }
         override fun isWorking(): Boolean = loop?.active == true
+        override fun appContext(): Context = applicationContext
+        override fun screenSize(): Pair<Int, Int> = realSize()
+        override fun toast(msg: String) {
+            ui.post { try { Toast.makeText(this@FloatingService, msg, Toast.LENGTH_LONG).show() } catch (_: Exception) {} }
+        }
+        override fun marker(x: Int, y: Int, color: Int) {
+            ui.post { this@FloatingService.marker(x, y, color) }
+        }
     }
 
     private fun closeMenu() {

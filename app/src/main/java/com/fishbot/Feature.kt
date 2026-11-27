@@ -8,6 +8,10 @@ interface FeatureHost {
     fun setPanelVisible(visible: Boolean)
     fun stopWork()
     fun isWorking(): Boolean
+    fun appContext(): android.content.Context
+    fun screenSize(): Pair<Int, Int>
+    fun toast(msg: String)
+    fun marker(x: Int, y: Int, color: Int)
 }
 
 /**
@@ -34,4 +38,4 @@ object FishFeature : Feature {
     override fun onDisable(host: FeatureHost) { host.stopWork(); host.setPanelVisible(false) }
 }
 
-val ALL_FEATURES: List<Feature> = listOf(FishFeature)
+val ALL_FEATURES: List<Feature> = listOf(FishFeature, BerriesFeature)

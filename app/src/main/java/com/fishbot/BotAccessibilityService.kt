@@ -19,6 +19,7 @@ class BotAccessibilityService : AccessibilityService() {
         @Volatile
         var instance: BotAccessibilityService? = null
         private const val SEG_MS = 50L
+        private const val JOY_SEG_MS = 50L
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -119,6 +120,102 @@ class BotAccessibilityService : AccessibilityService() {
         if (!ok) {
             inFlight = false
             stroke = null
+        }
+    }
+
+    // ---------------------------------------------------------------- джойстик (ягоды, этап 3)
+    // Отдельная цепочка жестов, не связанная с tap/pulse/setHold: один палец держится на джойстике,
+    // направление меняется продолжаемыми штрихами (идея и порядок как в setHold/pump, проверенных на ловле).
+    private var joyStroke: StrokeDescription? = null
+    private var joyInFlight = false
+    private var joyWant = false
+    private var joyAx = 0f
+    private var joyAy = 0f
+    private var joyEx = 0f
+    private var joyEy = 0f
+    private var joyCx = 0f
+    private var joyCy = 0f
+    @Volatile private var joySent = 0
+    @Volatile private var joyDone = 0
+    @Volatile private var joyCancelled = 0
+    @Volatile private var joyRejected = 0
+
+    fun joyStats(): String = "sent=$joySent done=$joyDone cancelled=$joyCancelled rejected=$joyRejected"
+
+    fun joyReset() { joySent = 0; joyDone = 0; joyCancelled = 0; joyRejected = 0 }
+
+    /** Касание джойстика в (ax, ay); палец уходит в (ex, ey) и остаётся там. Повторный вызов меняет направление. */
+    fun joyMove(ax: Float, ay: Float, ex: Float, ey: Float) {
+        main.post {
+            joyAx = ax; joyAy = ay; joyEx = ex; joyEy = ey
+            joyWant = true
+            try { joyPump() } catch (e: Throwable) { joyInFlight = false; joyStroke = null }
+        }
+    }
+
+    /** Отпустить джойстик (завершающий штрих на месте). Безопасно вызывать повторно. */
+    fun joyRelease() {
+        main.post {
+            joyWant = false
+            try { joyPump() } catch (e: Throwable) { joyInFlight = false; joyStroke = null }
+        }
+    }
+
+    private fun joyPump() {
+        if (joyInFlight) return
+        val cur = joyStroke
+        val p = Path()
+        val next: StrokeDescription
+        val cont: Boolean
+        val endX: Float
+        val endY: Float
+        if (joyWant) {
+            cont = true
+            endX = joyEx
+            endY = joyEy
+            if (cur == null) {
+                p.moveTo(joyAx, joyAy)
+                if (Math.abs(endX - joyAx) > 1f || Math.abs(endY - joyAy) > 1f) p.lineTo(endX, endY)
+                next = StrokeDescription(p, 0, JOY_SEG_MS, true)
+            } else {
+                p.moveTo(joyCx, joyCy)
+                if (Math.abs(endX - joyCx) > 1f || Math.abs(endY - joyCy) > 1f) p.lineTo(endX, endY)
+                next = cur.continueStroke(p, 0, JOY_SEG_MS, true)
+            }
+        } else if (cur != null) {
+            cont = false
+            endX = joyCx
+            endY = joyCy
+            p.moveTo(joyCx, joyCy)
+            next = cur.continueStroke(p, 0, 1, false)
+        } else {
+            return
+        }
+        joyInFlight = true
+        joySent++
+        val ok = dispatchGesture(
+            GestureDescription.Builder().addStroke(next).build(),
+            object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    joyInFlight = false
+                    joyDone++
+                    if (cont) { joyStroke = next; joyCx = endX; joyCy = endY } else joyStroke = null
+                    if (joyWant || joyStroke != null) joyPump()
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    joyInFlight = false
+                    joyCancelled++
+                    joyStroke = null
+                    if (joyWant && joyCancelled < 20) joyPump()
+                }
+            },
+            main
+        )
+        if (!ok) {
+            joyInFlight = false
+            joyStroke = null
+            joyRejected++
         }
     }
 }
