@@ -19,7 +19,8 @@ class BotAccessibilityService : AccessibilityService() {
         @Volatile
         var instance: BotAccessibilityService? = null
         private const val SEG_MS = 50L
-        private const val JOY_SEG_MS = 50L
+        private const val JOY_SEG_MS = 250L
+        private const val JOY_CANCEL_MAX = 5
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -123,99 +124,110 @@ class BotAccessibilityService : AccessibilityService() {
         }
     }
 
-    // ---------------------------------------------------------------- джойстик (ягоды, этап 3)
-    // Отдельная цепочка жестов, не связанная с tap/pulse/setHold: один палец держится на джойстике,
-    // направление меняется продолжаемыми штрихами (идея и порядок как в setHold/pump, проверенных на ловле).
-    private var joyStroke: StrokeDescription? = null
+    // ---------------------------------------------------------------- джойстик (ягоды, этап 3), версия p64
+    // Каждый штрих самозавершающийся (willContinue = false): после него палец гарантированно отпущен,
+    // залипнуть нечему. Пока joyWant и не наступил дедлайн, штрихи подаются подряд.
+    // swipe = false: палец касается сразу в точке цели (ex, ey) и держится;
+    // swipe = true: касание в якоре (ax, ay) и сдвиг к цели в пределах штриха.
     private var joyInFlight = false
     private var joyWant = false
+    private var joySwipe = false
     private var joyAx = 0f
     private var joyAy = 0f
     private var joyEx = 0f
     private var joyEy = 0f
-    private var joyCx = 0f
-    private var joyCy = 0f
+    private var joyUntil = 0L
+    private var joyCancelRun = 0
     @Volatile private var joySent = 0
     @Volatile private var joyDone = 0
     @Volatile private var joyCancelled = 0
     @Volatile private var joyRejected = 0
 
+    /** Приёмник строк лога джойстика (ставит BerriesFeature, выполняется в главном потоке). */
+    @Volatile var joyLog: ((String) -> Unit)? = null
+
+    private fun jlog(s: String) {
+        try { joyLog?.invoke(s) } catch (_: Throwable) {}
+    }
+
     fun joyStats(): String = "sent=$joySent done=$joyDone cancelled=$joyCancelled rejected=$joyRejected"
 
-    fun joyReset() { joySent = 0; joyDone = 0; joyCancelled = 0; joyRejected = 0 }
+    fun joyReset() { joySent = 0; joyDone = 0; joyCancelled = 0; joyRejected = 0; joyCancelRun = 0 }
 
-    /** Касание джойстика в (ax, ay); палец уходит в (ex, ey) и остаётся там. Повторный вызов меняет направление. */
-    fun joyMove(ax: Float, ay: Float, ex: Float, ey: Float) {
+    /** Держать джойстик в сторону (ex, ey) не дольше maxHoldMs (дедлайн страхует от залипания). Повторный вызов меняет цель. */
+    fun joyMove(ax: Float, ay: Float, ex: Float, ey: Float, swipe: Boolean, maxHoldMs: Long) {
         main.post {
             joyAx = ax; joyAy = ay; joyEx = ex; joyEy = ey
+            joySwipe = swipe
+            joyUntil = android.os.SystemClock.elapsedRealtime() + maxHoldMs
             joyWant = true
-            try { joyPump() } catch (e: Throwable) { joyInFlight = false; joyStroke = null }
+            joyCancelRun = 0
+            jlog("move swipe=$swipe to=${ex.toInt()},${ey.toInt()} hold_ms=$maxHoldMs")
+            try { joyPump() } catch (e: Throwable) { joyInFlight = false; jlog("pump error " + e) }
         }
     }
 
-    /** Отпустить джойстик (завершающий штрих на месте). Безопасно вызывать повторно. */
+    /** Отпустить: новых штрихов не будет, идущий штрих закончится сам (до JOY_SEG_MS). Безопасно вызывать повторно. */
     fun joyRelease() {
         main.post {
+            if (joyWant) jlog("release")
             joyWant = false
-            try { joyPump() } catch (e: Throwable) { joyInFlight = false; joyStroke = null }
         }
     }
 
     private fun joyPump() {
-        if (joyInFlight) return
-        val cur = joyStroke
-        val p = Path()
-        val next: StrokeDescription
-        val cont: Boolean
-        val endX: Float
-        val endY: Float
-        if (joyWant) {
-            cont = true
-            endX = joyEx
-            endY = joyEy
-            if (cur == null) {
-                p.moveTo(joyAx, joyAy)
-                if (Math.abs(endX - joyAx) > 1f || Math.abs(endY - joyAy) > 1f) p.lineTo(endX, endY)
-                next = StrokeDescription(p, 0, JOY_SEG_MS, true)
-            } else {
-                p.moveTo(joyCx, joyCy)
-                if (Math.abs(endX - joyCx) > 1f || Math.abs(endY - joyCy) > 1f) p.lineTo(endX, endY)
-                next = cur.continueStroke(p, 0, JOY_SEG_MS, true)
-            }
-        } else if (cur != null) {
-            cont = false
-            endX = joyCx
-            endY = joyCy
-            p.moveTo(joyCx, joyCy)
-            next = cur.continueStroke(p, 0, 1, false)
-        } else {
+        if (joyInFlight || !joyWant) return
+        val left = joyUntil - android.os.SystemClock.elapsedRealtime()
+        if (left <= 0L) {
+            joyWant = false
+            jlog("deadline")
             return
         }
+        val dur = Math.max(40L, Math.min(JOY_SEG_MS, left))
+        val sx = if (joySwipe) joyAx else joyEx
+        val sy = if (joySwipe) joyAy else joyEy
+        val ex = joyEx
+        val ey = joyEy
+        val p = Path()
+        p.moveTo(sx, sy)
+        if (Math.abs(ex - sx) > 1f || Math.abs(ey - sy) > 1f) p.lineTo(ex, ey)
+        val n = ++joySent
         joyInFlight = true
-        joySent++
         val ok = dispatchGesture(
-            GestureDescription.Builder().addStroke(next).build(),
+            GestureDescription.Builder().addStroke(StrokeDescription(p, 0, dur, false)).build(),
             object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
                     joyInFlight = false
                     joyDone++
-                    if (cont) { joyStroke = next; joyCx = endX; joyCy = endY } else joyStroke = null
-                    if (joyWant || joyStroke != null) joyPump()
+                    joyCancelRun = 0
+                    jlog("g$n completed")
+                    joyPump()
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
                     joyInFlight = false
                     joyCancelled++
-                    joyStroke = null
-                    if (joyWant && joyCancelled < 20) joyPump()
+                    joyCancelRun++
+                    jlog("g$n cancelled run=$joyCancelRun")
+                    if (joyWant) {
+                        if (joyCancelRun < JOY_CANCEL_MAX) {
+                            main.postDelayed({ joyPump() }, 30L)
+                        } else {
+                            joyWant = false
+                            jlog("stop: too many cancels in a row")
+                        }
+                    }
                 }
             },
             main
         )
         if (!ok) {
             joyInFlight = false
-            joyStroke = null
             joyRejected++
+            joyWant = false
+            jlog("g$n rejected by dispatchGesture")
+            return
         }
+        jlog("g$n sent from=${sx.toInt()},${sy.toInt()} to=${ex.toInt()},${ey.toInt()} dur=$dur")
     }
 }
