@@ -87,6 +87,10 @@ class FloatingService : Service() {
         License.startHeartbeat(this) { ui.post { stopSelf() } }
         showBubble()
         showMenuButton()
+        if (!menuPrefs().getBoolean("fishOn", true)) {
+            fishOn = false
+            try { root?.visibility = View.GONE } catch (_: Exception) {}
+        }
         return START_NOT_STICKY
     }
 
@@ -208,10 +212,17 @@ class FloatingService : Service() {
         val (w, h) = realSize()
         val sp = menuPrefs()
         val fx = sp.getFloat("mx", 0.70f).coerceIn(0.62f, 0.78f)
-        val fy = sp.getFloat("my", 0.07f).coerceIn(0.03f, 0.10f)
+        val fy = clampMenuY(sp.getFloat("my", 0.07f), h, lp.height)
         lp.x = (fx * w).toInt() - lp.width / 2
         lp.y = (fy * h).toInt() - lp.height / 2
         try { wm.updateViewLayout(b, lp) } catch (_: Exception) {}
+    }
+
+    /** Центр кнопки по вертикали: в полосе 0.03-0.10 H и так, чтобы кнопка целиком влезала на экран. */
+    private fun clampMenuY(cy: Float, h: Int, d: Int): Float {
+        val lo = maxOf(0.03f, (d / 2f + dp(4)) / h)
+        val hi = maxOf(lo, 0.10f)
+        return cy.coerceIn(lo, hi)
     }
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
@@ -247,7 +258,7 @@ class FloatingService : Service() {
                             if (moved) {
                                 val (cw, ch) = realSize()
                                 val cx = ((sx + dx + lp.width / 2f) / cw).coerceIn(0.62f, 0.78f)
-                                val cy = ((sy + dy + lp.height / 2f) / ch).coerceIn(0.03f, 0.10f)
+                                val cy = clampMenuY((sy + dy + lp.height / 2f) / ch, ch, lp.height)
                                 lp.x = (cx * cw).toInt() - lp.width / 2
                                 lp.y = (cy * ch).toInt() - lp.height / 2
                                 try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
@@ -338,6 +349,7 @@ class FloatingService : Service() {
     private fun setFish(on: Boolean) {
         if (!on && loop?.active == true) pause()
         fishOn = on
+        try { menuPrefs().edit().putBoolean("fishOn", on).apply() } catch (_: Exception) {}
         try { root?.visibility = if (on) View.VISIBLE else View.GONE } catch (_: Exception) {}
     }
 
