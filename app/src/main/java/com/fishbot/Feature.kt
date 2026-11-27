@@ -14,6 +14,8 @@ interface FeatureHost {
     fun marker(x: Int, y: Int, color: Int)
     /** Один кадр экрана целиком (пиксели ARGB) или null, если кадра нет. Вызывать НЕ из главного потока. */
     fun grabFrame(): ScanFrame?
+    /** Причина последней неудачи grabFrame() для лога ("ok", если кадр был). */
+    fun grabWhy(): String
 }
 
 /**

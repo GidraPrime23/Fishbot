@@ -45,6 +45,7 @@ class FloatingService : Service() {
     private lateinit var prefs: Prefs
     private var projection: MediaProjection? = null
     private var grabber: ScreenGrabber? = null
+    @Volatile private var grabWhy: String = ""
     private var loop: BotLoop? = null
 
     private var root: LinearLayout? = null
@@ -362,15 +363,25 @@ class FloatingService : Service() {
         }
         override fun stopWork() { if (loop?.active == true) pause() }
         override fun isWorking(): Boolean = loop?.active == true
+        override fun grabWhy(): String = grabWhy
         override fun grabFrame(): ScanFrame? {
             return try {
-                val g = grabber ?: return null
-                val img = g.poll() ?: g.latest() ?: return null
+                val g = grabber
+                if (g == null) { grabWhy = "no_grabber"; return null }
+                g.ensure()
+                var img = g.poll() ?: g.latest()
+                var tries = 0
+                while (img == null && tries < 8) {
+                    Thread.sleep(60)
+                    img = g.poll() ?: g.latest()
+                    tries++
+                }
+                if (img == null) { grabWhy = "no_image_after_ensure"; return null }
                 val w = img.width
                 val h = img.height
                 val px = g.region(img, 0, 0, w, h)
-                if (px.size < w * h) null else ScanFrame(w, h, px)
-            } catch (_: Throwable) { null }
+                if (px.size < w * h) { grabWhy = "region_small " + px.size; null } else { grabWhy = "ok"; ScanFrame(w, h, px) }
+            } catch (e: Throwable) { grabWhy = "exc " + e; null }
         }
         override fun appContext(): Context = applicationContext
         override fun screenSize(): Pair<Int, Int> = realSize()

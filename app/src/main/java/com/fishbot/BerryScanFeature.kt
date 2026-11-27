@@ -105,7 +105,7 @@ object BerryScanFeature : Feature {
                 val tick = SystemClock.elapsedRealtime()
                 val f = host.grabFrame()
                 if (f == null) {
-                    log("F" + fi + " no_frame")
+                    log("F" + fi + " no_frame " + host.grabWhy())
                 } else {
                     frames++
                     val t1 = SystemClock.elapsedRealtime()
